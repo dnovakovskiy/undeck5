@@ -2585,7 +2585,7 @@ input[type="range"] {
     font-size: 9px;
   }
   #app[data-surface="booth"] .djs-body {
-    grid-template-columns: 64px minmax(0, 1fr) 132px;
+    grid-template-columns: 78px minmax(0, 1fr) 132px;
     gap: 6px;
     margin-bottom: 4px;
   }
