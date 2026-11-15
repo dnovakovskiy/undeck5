@@ -227,16 +227,37 @@ impl DeviceTable {
         best.map(|(n, _)| n)
     }
 
+    /// Whether `number` is currently marked on-air at the mixer or in its own status.
+    pub(crate) fn is_on_air(&self, number: u8, now: u64) -> bool {
+        let Some(peer) = self.peers.get(&number) else {
+            return false;
+        };
+        let player = self.kind(number) == DeviceKind::Player;
+        peer.on_air
+            .or_else(|| peer.fresh_status(now).filter(|_| player).map(|s| s.on_air))
+            == Some(true)
+    }
+
     /// Which device to follow: the requested one, or for
     /// [`FollowTarget::Master`] the tempo master, else the lowest-numbered
-    /// playing player.
+    /// on-air playing player, else the lowest-numbered playing player.
     pub(crate) fn resolve(&self, target: FollowTarget, now: u64) -> Option<u8> {
         match target {
             FollowTarget::Device(n) => Some(n),
             FollowTarget::Master => self.master(now).or_else(|| {
-                self.peers.keys().copied().find(|&n| {
-                    self.kind(n) == DeviceKind::Player && self.playing(n, now) == Some(true)
-                })
+                self.peers
+                    .keys()
+                    .copied()
+                    .find(|&n| {
+                        self.kind(n) == DeviceKind::Player
+                            && self.playing(n, now) == Some(true)
+                            && self.is_on_air(n, now)
+                    })
+                    .or_else(|| {
+                        self.peers.keys().copied().find(|&n| {
+                            self.kind(n) == DeviceKind::Player && self.playing(n, now) == Some(true)
+                        })
+                    })
             }),
         }
     }
@@ -447,5 +468,31 @@ mod tests {
         assert!(!differs(&a, &b, 0.05));
         assert!(differs(&a, &b, 0.0));
         assert!(differs(&a, &[], 0.05));
+    }
+
+    #[test]
+    fn passive_fallback_prefers_on_air_playing_player() {
+        let mut t = DeviceTable::default();
+        t.keep_alive(&keep_alive(1, "CDJ-3000", 1), ip(1), 0);
+        t.keep_alive(&keep_alive(2, "CDJ-3000", 1), ip(2), 0);
+        // Both decks emit beats (e.g. Deck 1 cueing in headphones, Deck 2 live on mixer).
+        t.beat(&BeatPacket::new(1, 128.0, 0.0, 1), ip(1), S);
+        t.beat(&BeatPacket::new(2, 126.0, 0.0, 1), ip(2), S);
+        assert_eq!(t.resolve(FollowTarget::Master, S), Some(1));
+
+        // Mixer reports Deck 1 off-air, Deck 2 on-air.
+        t.on_air(&OnAir {
+            device: 0x21,
+            name: "DJM-A9".into(),
+            channels: [
+                Some(false),
+                Some(true),
+                Some(false),
+                Some(false),
+                None,
+                None,
+            ],
+        });
+        assert_eq!(t.resolve(FollowTarget::Master, S), Some(2));
     }
 }

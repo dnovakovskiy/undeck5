@@ -1,7 +1,17 @@
 // NI Maschine-inspired Groove, Humanize & Variation generator + Per-Voice /
 // Group FX definitions for player5.
 
-import { cloneSpec, normalizeSteps, sanitize, STEP_COUNT, type PatternSpec, type StepChar } from "./spec";
+import {
+  cloneSpec,
+  normalizeSteps,
+  sanitize,
+  setStepsForBar,
+  STEP_COUNT,
+  stepsForBar,
+  type BarId,
+  type PatternSpec,
+  type StepChar,
+} from "./spec";
 import { VOICES, type VoiceId } from "./voices";
 
 export type GrooveTemplateId =
@@ -213,6 +223,7 @@ export function humanizePattern(
   spec: PatternSpec,
   scope: VoiceId | "all" = "all",
   amount = 0.45,
+  bar: BarId = "a",
 ): PatternSpec {
   const next = cloneSpec(spec);
   const intensity = Math.max(0.1, Math.min(1, amount));
@@ -220,7 +231,7 @@ export function humanizePattern(
 
   for (const vid of targets) {
     const v = next.voices[vid];
-    const chars = [...normalizeSteps(v.steps)] as StepChar[];
+    const chars = [...normalizeSteps(stepsForBar(v, bar))] as StepChar[];
     for (let i = 0; i < STEP_COUNT; i++) {
       const c = chars[i]!;
       if (c === "-") {
@@ -255,7 +266,7 @@ export function humanizePattern(
         chars[i] = r < 0.45 ? "X" : r < 0.62 ? "f" : "x";
       }
     }
-    v.steps = chars.join("");
+    setStepsForBar(v, bar, chars.join(""));
     const span = 0.05 * intensity;
     v.tune = jitterParam(v.tune, span);
     v.decay = jitterParam(v.decay, span);
@@ -278,6 +289,7 @@ export function mutatePattern(
   spec: PatternSpec,
   scope: VoiceId | "all" = "all",
   spice = 0.45,
+  bar: BarId = "a",
 ): PatternSpec {
   const next = cloneSpec(spec);
   const density = Math.max(0.15, Math.min(1, spice));
@@ -285,7 +297,7 @@ export function mutatePattern(
 
   for (const vid of targets) {
     const v = next.voices[vid];
-    const chars = [...normalizeSteps(v.steps)] as StepChar[];
+    const chars = [...normalizeSteps(stepsForBar(v, bar))] as StepChar[];
 
     switch (vid) {
       case "kick":
@@ -346,7 +358,7 @@ export function mutatePattern(
         }
         break;
     }
-    v.steps = chars.join("");
+    setStepsForBar(v, bar, chars.join(""));
   }
 
   return sanitize(next);
@@ -356,11 +368,12 @@ export function mutatePattern(
  * TR-8S / Maschine Auto-Fill: writes an energetic 4-step turnaround fill into
  * steps 13–16 (snare flam roll, tom cascade, clap accent, and open hat lift).
  */
-export function applyAutoFill(spec: PatternSpec): PatternSpec {
+export function applyAutoFill(spec: PatternSpec, bar: BarId = "a"): PatternSpec {
   const next = cloneSpec(spec);
   const setTail = (vid: VoiceId, tail4: string) => {
-    const cur = normalizeSteps(next.voices[vid].steps);
-    next.voices[vid].steps = cur.slice(0, 12) + tail4;
+    const v = next.voices[vid];
+    const cur = normalizeSteps(stepsForBar(v, bar));
+    setStepsForBar(v, bar, cur.slice(0, 12) + tail4);
   };
   setTail("snare", "xXfF");
   setTail("clap", "X-XX");

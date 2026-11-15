@@ -35,6 +35,10 @@ export function template(o: TemplateOptions): string {
   const grooveOptions = GROOVE_TEMPLATES.map(
     (g) => `<option value="${g.id}" title="${g.blurb}">${g.name}</option>`,
   ).join("");
+  const lastStepOptions = Array.from({ length: 16 }, (_, idx) => {
+    const n = 16 - idx;
+    return `<option value="${n}">${n} stp</option>`;
+  }).join("");
   const unavailable = o.single
     ? "Bridge and MIDI clock need the full app; they are switched off in this embedded copy."
     : !o.bridge && !o.midi
@@ -44,14 +48,33 @@ export function template(o: TemplateOptions): string {
           ? "MIDI clock needs a browser with Web MIDI (Chrome, Edge)."
           : "MIDI clock needs a secure page: open the app over https or from localhost."
         : "";
+  const phaseSegments = Array.from(
+    { length: 16 },
+    (_, idx) => `<i data-djs-phase="${idx}" class="${idx % 4 === 0 ? "beat" : ""}"></i>`,
+  ).join("");
+  const sceneButtons = Array.from(
+    { length: 8 },
+    (_, idx) =>
+      `<button type="button" class="djs-scene-btn" data-djs-scene="${idx}" aria-pressed="${idx === 0}">S${idx + 1}</button>`,
+  ).join("");
   return `
   <a class="skip" href="#grid">Skip to the pattern</a>
   <header class="top">
     <h1 class="logo">player<span>5</span></h1>
     <div class="mode-tabs" role="group" aria-label="Surface mode">
-      <button id="mode-seq" type="button" class="mode-tab" aria-pressed="true">Step Sequencer</button>
-      <button id="mode-rmx" type="button" class="mode-tab" aria-pressed="false">RMX-1000 Station</button>
+      <button id="mode-seq" type="button" class="mode-tab" aria-pressed="true" title="Classic TR-style 16/64-step drum machine">Step Sequencer</button>
+      <button id="mode-djs" type="button" class="mode-tab" aria-pressed="false" title="Pioneer DJ DJS-1000 CDJ-format standalone DJ sampler &amp; 64-step sequencer">DJS-1000 Deck</button>
+      <button id="mode-rmx" type="button" class="mode-tab" aria-pressed="false" title="Pioneer RMX-1000 4-section remix station">RMX-1000 Station</button>
+      <button id="mode-booth" type="button" class="mode-tab" aria-pressed="false" title="MacBook Air 13-inch split performance view: Sequencer/DJS + RMX-1000 side by side (Shift + ~)">Booth Split</button>
     </div>
+    <select id="theme-select" class="theme-select" aria-label="Visual color scheme" title="Switch hardware visual &amp; color scheme">
+      <option value="default">8O8 Booth</option>
+      <option value="tr-classic">8O8 Classic</option>
+      <option value="tr-silver">9O9 Silver</option>
+      <option value="tr-neon">TR-8S Neon</option>
+      <option value="pioneer">Pioneer CDJ</option>
+      <option value="maschine">NI Maschine</option>
+    </select>
     <button id="how-to-btn" type="button" class="howto-btn" aria-keyshortcuts="?" title="Open 3Blue1Brown-style video explainer &amp; MacBook Air keyboard guide (?)">How to · ?</button>
     <div class="top-status">
       <span id="engine-mode" class="engine-mode" title="Audio engine runtime"></span>
@@ -90,13 +113,17 @@ export function template(o: TemplateOptions): string {
     </div>
   </section>
 
+  <div class="booth-deck" id="booth-deck">
   <section class="panel rmx-panel" id="rmx-panel" aria-labelledby="rmx-title" hidden>
     <div class="panel-head rmx-head">
       <div class="rmx-brand">
         <h2 id="rmx-title">RMX-1000 · Remix Station</h2>
         <output id="rmx-readout" class="rmx-readout" aria-live="polite">BPF ECHO 0% · X-PAD SNARE 1/8</output>
       </div>
-      <button id="rmx-reset" type="button" class="small" title="Reset all RMX-1000 FX parameters">Reset FX</button>
+      <div class="rmx-head-actions">
+        <button id="rmx-ext-in" type="button" class="toggle small"${o.single ? " hidden" : ""} aria-pressed="false" title="Route external stereo audio input (loopback / mixer return) through the RMX-1000 FX engine">EXT IN</button>
+        <button id="rmx-reset" type="button" class="small" title="Reset all RMX-1000 FX parameters">Reset FX</button>
+      </div>
     </div>
 
     <div class="rmx-grid">
@@ -207,6 +234,10 @@ export function template(o: TemplateOptions): string {
             <span class="knob-label">SUB PARAM (RESO / FB) <output id="rmx-scene-sub-out" for="rmx-scene-sub">50%</output></span>
             <input id="rmx-scene-sub" type="range" min="0" max="1" step="0.01" value="0.5" />
           </label>
+          <label class="knob" for="rmx-scene-sub2">
+            <span class="knob-label">SUB 2 (TONE / MOD) <output id="rmx-scene-sub2-out" for="rmx-scene-sub2">50%</output></span>
+            <input id="rmx-scene-sub2" type="range" min="0" max="1" step="0.01" value="0.5" />
+          </label>
         </div>
       </div>
     </div>
@@ -224,15 +255,134 @@ export function template(o: TemplateOptions): string {
     </div>
   </section>
 
+  <div class="booth-seq-col">
+  <section class="panel djs-panel" id="djs-panel" aria-labelledby="djs-title" hidden>
+    <div class="panel-head djs-head">
+      <div class="djs-brand">
+        <h2 id="djs-title">DJS-1000 · Pioneer DJ Standalone Sequencer</h2>
+        <span id="djs-sync-badge" class="djs-sync-badge" data-locked="false">INT MASTER</span>
+      </div>
+      <div class="djs-head-actions">
+        <button id="booth-swap-tr" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
+        <button id="djs-quantize" type="button" class="toggle small" aria-pressed="true" title="Snap DJS-1000 pads &amp; rolls to the beat grid">QUANTIZE</button>
+        <button id="djs-live-rec" type="button" class="toggle small djs-rec-btn" aria-pressed="false" title="Overdub live pad hits into the active bar">LIVE REC</button>
+      </div>
+    </div>
+
+    <div class="djs-screen" role="region" aria-label="DJS-1000 7-inch touch display">
+      <div class="djs-screen-top">
+        <span id="djs-screen-track" class="djs-screen-track">TRK 1 · BD KICK</span>
+        <div class="djs-phase-scope" aria-hidden="true">${phaseSegments}</div>
+        <div class="djs-screen-meta">
+          <span id="djs-screen-bar" class="djs-screen-bar">BAR 1.1 / 1B</span>
+          <strong id="djs-screen-bpm" class="djs-screen-bpm">124.0</strong>
+        </div>
+      </div>
+      <div class="djs-scenes-row" role="group" aria-label="DJS-1000 Scene matrix">
+        <span class="label">SCENES</span>
+        <div class="djs-scenes">${sceneButtons}</div>
+        <button id="djs-capture-scene" type="button" class="small" title="Snapshot current 64-step pattern into active Scene slot">Capture</button>
+      </div>
+    </div>
+
+    <div class="djs-body">
+      <div class="djs-strip-col" role="group" aria-label="DJS-1000 Touch Strip">
+        <div class="djs-strip-modes">
+          <button type="button" class="small" data-djs-strip-mode="repeat" aria-pressed="true" title="Touch Strip triggers quantized Note Repeat">REPEAT</button>
+          <button type="button" class="small" data-djs-strip-mode="pitch" aria-pressed="false" title="Touch Strip triggers Pitch Bend intervals">PITCH</button>
+        </div>
+        <div class="djs-touch-strip">
+          <button type="button" data-djs-strip-div="32">1/32</button>
+          <button type="button" data-djs-strip-div="16">1/16</button>
+          <button type="button" data-djs-strip-div="8">1/8</button>
+          <button type="button" data-djs-strip-div="4">1/4</button>
+        </div>
+      </div>
+
+      <div class="djs-center-col">
+        <div class="djs-pad-modes" role="group" aria-label="DJS-1000 Performance Pad mode">
+          <button type="button" class="small" data-djs-pad-mode="track" aria-pressed="true">TRACK PLAY</button>
+          <button type="button" class="small" data-djs-pad-mode="mute" aria-pressed="false">MUTE / SOLO</button>
+          <button type="button" class="small" data-djs-pad-mode="scale" aria-pressed="false">16-PAD PITCH</button>
+          <button type="button" class="small" data-djs-pad-mode="slice" aria-pressed="false">HOT ROLL</button>
+        </div>
+        <div id="djs-pad-grid" class="djs-pad-grid" role="group" aria-label="16 multicolor RGB performance pads"></div>
+      </div>
+
+      <div class="djs-deck-col" role="group" aria-label="CDJ Tempo &amp; Pro DJ Link controls">
+        <button id="djs-beat-sync" type="button" class="toggle small djs-sync-btn" aria-pressed="false" title="Lock to Pro DJ Link Bridge / Ableton Link or snap beat phase">BEAT SYNC</button>
+        <div class="djs-nudge-row">
+          <button id="djs-nudge-down" type="button" class="small" title="Phase nudge earlier (−2 ms, Shift: −0.5 ms)">NUDGE −</button>
+          <button id="djs-nudge-up" type="button" class="small" title="Phase nudge later (+2 ms, Shift: +0.5 ms)">NUDGE +</button>
+        </div>
+        <label class="djs-tempo-wrap" for="djs-tempo-slider">
+          <span class="label">TEMPO ±6% <output id="djs-tempo-out" for="djs-tempo-slider">+0.0%</output></span>
+          <input id="djs-tempo-slider" type="range" min="-6" max="6" step="0.1" value="0" />
+        </label>
+        <button id="djs-tempo-reset" type="button" class="small" title="Reset CDJ tempo slider to 0.0%">RESET 0%</button>
+        <div class="djs-cdj-bezel">
+          <button id="djs-cue" type="button" class="djs-cue-btn" title="Cue / Reset bar phase to Beat 1.1">CUE</button>
+          <button id="djs-play" type="button" class="djs-play-btn" aria-pressed="false" title="Start / Stop sequencer transport">PLAY / PAUSE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="djs-seq-footer" role="group" aria-label="DJS-1000 16-step multicolor sequencer strip">
+      <div class="djs-seq-bar-row">
+        <span id="djs-strip-track-label" class="djs-strip-track-label">BD · BAR A</span>
+        <div class="djs-bar-tabs" role="group" aria-label="DJS-1000 64-step bar pages">
+          <button type="button" class="toggle small" data-djs-bar="a" aria-pressed="true">A</button>
+          <button type="button" class="toggle small" data-djs-bar="b" aria-pressed="false">B</button>
+          <button type="button" class="toggle small" data-djs-bar="c" aria-pressed="false">C</button>
+          <button type="button" class="toggle small" data-djs-bar="d" aria-pressed="false">D</button>
+          <button type="button" class="toggle small" data-djs-bar="ab" aria-pressed="false" title="32-step 2-bar chain">A+B</button>
+          <button type="button" class="toggle small" data-djs-bar="abcd" aria-pressed="false" title="64-step 4-bar chain">A–D (64)</button>
+        </div>
+      </div>
+      <div id="djs-step-strip" class="djs-step-strip"></div>
+    </div>
+  </section>
+
   <section class="panel grid-panel" id="grid-panel" aria-labelledby="grid-title">
     <div class="panel-head">
       <div class="grid-brand">
-        <h2 id="grid-title">TR-REC Pattern · 16-Step Sequencer</h2>
+        <h2 id="grid-title">TR-REC Pattern · 64-Step Sequencer</h2>
         <span class="tr-color-key" aria-hidden="true">
           <i class="c1">1–4</i><i class="c2">5–8</i><i class="c3">9–12</i><i class="c4">13–16</i>
         </span>
       </div>
-      <span class="hint" id="grid-hint"></span>
+      <div class="grid-head-right">
+        <button id="booth-swap-djs" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Pioneer DJS-1000 Sampler/Sequencer">DJS-1000 ⇄</button>
+        <span class="hint" id="grid-hint"></span>
+      </div>
+    </div>
+
+    <div class="tr-var-bar" role="region" aria-label="TR-8S 64-Step Pattern Variations, Last Step &amp; Mixer">
+      <div class="tr-bank-group" role="group" aria-label="Pattern A/B/C/D 64-step variation">
+        <span class="label">BAR</span>
+        <button id="var-bank-a" type="button" class="toggle small" aria-pressed="true" title="Play &amp; edit 16-step Bar A (Steps 1–16)">A</button>
+        <button id="var-bank-b" type="button" class="toggle small" aria-pressed="false" title="Play &amp; edit 16-step Bar B (Steps 17–32)">B</button>
+        <button id="var-bank-c" type="button" class="toggle small" aria-pressed="false" title="Play &amp; edit 16-step Bar C (Steps 33–48)">C</button>
+        <button id="var-bank-d" type="button" class="toggle small" aria-pressed="false" title="Play &amp; edit 16-step Bar D (Steps 49–64)">D</button>
+        <button id="var-bank-ab" type="button" class="toggle small" aria-pressed="false" title="Chain A + B into a 32-step 2-bar phrase">A+B</button>
+        <button id="var-bank-abcd" type="button" class="toggle small" aria-pressed="false" title="Chain A → B → C → D into a 64-step 4-bar phrase">A–D</button>
+        <button id="var-copy-ab" type="button" class="small" title="Duplicate active bar into the next bar (A→B→C→D)">Copy→</button>
+        <button id="var-follow" type="button" class="toggle small" aria-pressed="false" title="Auto-follow playing bar page during 32/64-step chains">Follow</button>
+      </div>
+      <div class="tr-loop-group">
+        <label class="inline-field" for="last-step">
+          <span class="label">LAST</span>
+          <select id="last-step" aria-label="Last step" title="Polymetric loop length (1 to 16 steps)">${lastStepOptions}</select>
+        </label>
+        <button id="fill-hold" type="button" class="toggle small fill-btn" aria-pressed="false" title="Hold for momentary real-time TR-8S turnaround fill">FILL [Hold]</button>
+        <select id="auto-fill-bars" aria-label="Auto-fill interval" title="Automatically trigger fill bar every N bars">
+          <option value="0">Auto-Fill: Off</option>
+          <option value="2">Every 2 Bars</option>
+          <option value="4">Every 4 Bars</option>
+          <option value="8">Every 8 Bars</option>
+        </select>
+        <button id="mixer-toggle" type="button" class="toggle small" aria-pressed="false" title="Toggle 10-channel TR-8S fader mixer">10-Ch Mixer</button>
+      </div>
     </div>
 
     <div class="tr-perf-strip" role="region" aria-label="Groove, Variation &amp; Per-Sample FX">
@@ -274,6 +424,7 @@ export function template(o: TemplateOptions): string {
       </div>
     </div>
 
+    <div id="mixer-drawer" class="mixer-drawer" hidden role="region" aria-label="10-channel level &amp; solo mixer"></div>
     <div id="grid" class="grid" tabindex="-1"></div>
   </section>
 
@@ -284,6 +435,7 @@ export function template(o: TemplateOptions): string {
         <span class="hint">select a row label</span>
       </div>
       <div id="voice-controls" class="knobs"></div>
+      <div id="voice-extra" class="voice-extra"></div>
     </section>
 
     <section class="panel master" aria-labelledby="master-title">
@@ -303,6 +455,8 @@ export function template(o: TemplateOptions): string {
       </div>
     </section>
   </div>
+  </div>
+  </div>
 
   <section class="panel clock" id="clock" aria-labelledby="clock-title" data-source="internal" data-lock="off">
     <div class="panel-head">
@@ -319,6 +473,7 @@ export function template(o: TemplateOptions): string {
     <div class="readout">
       <div class="cell"><span class="label">Tempo</span><output id="clock-tempo" class="big">—</output></div>
       <div class="cell"><span class="label">Lock</span><output id="clock-lock" class="big">—</output></div>
+      <div class="cell"><span class="label">Drift</span><output id="clock-drift" class="big">—</output></div>
       <div class="cell"><span class="label">Bar</span>
         <span class="beats" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <output id="clock-beat" class="beat-num" aria-label="Beat in bar">–</output>
@@ -336,7 +491,16 @@ export function template(o: TemplateOptions): string {
         <button id="link-connect" type="button">Join Link</button>
         <output id="link-peers" class="link-peers-badge" aria-live="polite">0 peers</output>
       </div>
-      <p class="hint">Syncs tempo &amp; 4-beat bar phase with Ableton Live, Traktor, Serato, or other Link apps on the same Wi-Fi/LAN via player5-bridge, plus automatic browser-tab Link mesh.</p>
+      <div class="row-fields link-session-bar">
+        <label class="switch compact-switch" for="link-start-stop">
+          <input id="link-start-stop" type="checkbox" role="switch" />
+          <span>Start/Stop Sync</span>
+        </label>
+        <button id="link-bpm-down" type="button" class="small" title="Nudge Ableton Link session tempo down 1 BPM (Shift: 0.1)">Link −1</button>
+        <button id="link-bpm-up" type="button" class="small" title="Nudge Ableton Link session tempo up 1 BPM (Shift: 0.1)">Link +1</button>
+        <button id="link-push-bpm" type="button" class="small" title="Broadcast pattern BPM to all Ableton Link peers">Push Pattern BPM</button>
+      </div>
+      <p class="hint">Syncs tempo, 4-beat bar phase &amp; Start/Stop transport with Ableton Live, Traktor, or Serato over Wi-Fi/LAN via player5-bridge, plus automatic browser-tab Link mesh.</p>
     </div>
     <div class="source-panel" data-for="bridge">
       <div class="row-fields">
@@ -367,6 +531,13 @@ export function template(o: TemplateOptions): string {
       </div>
       <label class="field" for="latency"><span class="label">Latency offset (ms)</span>
         <input id="latency" type="number" step="1" min="-250" max="250" inputmode="numeric" /></label>
+      <label class="switch compact-switch" for="quant-launch" title="When synced externally, arm Play to start cleanly on the next 4-beat bar downbeat">
+        <input id="quant-launch" type="checkbox" role="switch" />
+        <span>1-Bar Launch</span>
+      </label>
+      <button id="sync-click" type="button" class="small" title="Fire a calibration rim-click through the output to dial in Latency offset by ear">Sync Click</button>
+      <label class="field" id="audio-sink-wrap" for="audio-sink" hidden><span class="label">Audio output</span>
+        <select id="audio-sink"><option value="">System Default</option></select></label>
       <button id="resync" type="button" title="Snap to the source (internal: restart the bar)">Re-sync</button>
     </div>
   </section>

@@ -14,14 +14,25 @@ export const STEP_COUNT = 16;
 /** Step symbols: off, hit, accent, flam, accent + flam. */
 export type StepChar = "-" | "x" | "X" | "f" | "F";
 
+export type BarId = "a" | "b" | "c" | "d";
+export const BAR_IDS: readonly BarId[] = ["a", "b", "c", "d"] as const;
+
 export interface VoiceSpec {
   steps: string;
+  steps_b?: string;
+  steps_c?: string;
+  steps_d?: string;
+  steps_fill?: string;
   tune: number;
   decay: number;
   tone: number;
   snappy: number;
   level: number;
+  echo_send: number;
+  reverb_send: number;
+  filter_send: number;
   mute: boolean;
+  solo: boolean;
 }
 
 export interface RenderSpec {
@@ -29,11 +40,21 @@ export interface RenderSpec {
   limiter: boolean;
 }
 
+/** 0=A, 1=B, 2=A+B (32 stp), 3=C, 4=D, 5=A-D (64 stp). */
+export type VariationCode = 0 | 1 | 2 | 3 | 4 | 5;
+
 export interface PatternSpec {
   bpm: number;
   shuffle: number;
+  humanize: number;
   accent: number;
   flam: number;
+  last_step: number;
+  variation: VariationCode;
+  fill: boolean;
+  auto_fill_bars: number;
+  kit_model: number;
+  cymbal_mode: number;
   voices: Record<VoiceId, VoiceSpec>;
   render: RenderSpec;
 }
@@ -44,7 +65,15 @@ export const BPM_MAX = 400;
 export const GAIN_MAX = 4;
 
 export function defaultVoice(steps = EMPTY_STEPS): VoiceSpec {
-  return { steps, ...CONTROL_DEFAULTS, mute: false };
+  return {
+    steps,
+    ...CONTROL_DEFAULTS,
+    echo_send: 0,
+    reverb_send: 0,
+    filter_send: 0,
+    mute: false,
+    solo: false,
+  };
 }
 
 /** A blank pattern: no steps, core defaults everywhere. */
@@ -54,8 +83,15 @@ export function emptySpec(bpm = 124): PatternSpec {
   return {
     bpm,
     shuffle: 0,
+    humanize: 0,
     accent: 0.5,
     flam: 0.5,
+    last_step: STEP_COUNT,
+    variation: 0,
+    fill: false,
+    auto_fill_bars: 0,
+    kit_model: 0,
+    cymbal_mode: 0,
     voices,
     render: { output_gain: 1, limiter: false },
   };
@@ -86,9 +122,19 @@ function withStep(steps: string, index: number, c: StepChar): string {
   return chars.join("");
 }
 
+export function setStep(steps: string, index: number, c: StepChar): string {
+  return withStep(steps, index, c);
+}
+
 /** Normal tap: off → hit → accent → off. A flammed step stays flammed. */
 export function cycleStep(steps: string, index: number): string {
   const next: Record<StepChar, StepChar> = { "-": "x", x: "X", X: "-", f: "F", F: "-" };
+  return withStep(steps, index, next[stepAt(steps, index)]);
+}
+
+/** Direct accent toggle (Right-click / Option-click): off/hit → accent, accent → off. */
+export function toggleAccent(steps: string, index: number): string {
+  const next: Record<StepChar, StepChar> = { "-": "X", x: "X", X: "-", f: "F", F: "f" };
   return withStep(steps, index, next[stepAt(steps, index)]);
 }
 
@@ -100,6 +146,37 @@ export function toggleFlam(steps: string, index: number): string {
 
 export function describeStep(c: StepChar): string {
   return { "-": "off", x: "hit", X: "accent", f: "flam", F: "accent flam" }[c];
+}
+
+export function stepsForBar(v: VoiceSpec, bar: BarId): string {
+  switch (bar) {
+    case "a":
+      return normalizeSteps(v.steps);
+    case "b":
+      return normalizeSteps(v.steps_b ?? v.steps);
+    case "c":
+      return normalizeSteps(v.steps_c ?? v.steps);
+    case "d":
+      return normalizeSteps(v.steps_d ?? v.steps_b ?? v.steps);
+  }
+}
+
+export function setStepsForBar(v: VoiceSpec, bar: BarId, steps: string): void {
+  const norm = normalizeSteps(steps);
+  switch (bar) {
+    case "a":
+      v.steps = norm;
+      break;
+    case "b":
+      v.steps_b = norm;
+      break;
+    case "c":
+      v.steps_c = norm;
+      break;
+    case "d":
+      v.steps_d = norm;
+      break;
+  }
 }
 
 // ---- sanitising ----
@@ -130,15 +207,33 @@ export function sanitize(input: unknown): PatternSpec {
   for (const id of VOICE_IDS) {
     const v = (voicesIn[id] && typeof voicesIn[id] === "object" ? voicesIn[id] : {}) as Record<string, unknown>;
     const out = defaultVoice(normalizeSteps(typeof v.steps === "string" ? v.steps : EMPTY_STEPS));
+    if (typeof v.steps_b === "string") out.steps_b = normalizeSteps(v.steps_b);
+    if (typeof v.steps_c === "string") out.steps_c = normalizeSteps(v.steps_c);
+    if (typeof v.steps_d === "string") out.steps_d = normalizeSteps(v.steps_d);
+    if (typeof v.steps_fill === "string") out.steps_fill = normalizeSteps(v.steps_fill);
     for (const c of CONTROL_IDS) out[c] = unit(v[c], CONTROL_DEFAULTS[c]);
+    out.echo_send = unit(v.echo_send, 0);
+    out.reverb_send = unit(v.reverb_send, 0);
+    out.filter_send = unit(v.filter_send, 0);
     out.mute = v.mute === true;
+    out.solo = v.solo === true;
     voices[id] = out;
   }
+  const rawVar = Math.round(clamp(num(o.variation, 0), 0, 5));
+  const rawAutoFill = Math.round(clamp(num(o.auto_fill_bars, 0), 0, 16));
+  const autoFillBars = rawAutoFill === 2 || rawAutoFill === 4 || rawAutoFill === 8 ? rawAutoFill : 0;
   return {
     bpm: round(clamp(num(o.bpm, 120), BPM_MIN, BPM_MAX), 2),
     shuffle: unit(o.shuffle, 0),
+    humanize: unit(o.humanize, 0),
     accent: unit(o.accent, 0.5),
     flam: unit(o.flam, 0.5),
+    last_step: Math.round(clamp(num(o.last_step, STEP_COUNT), 1, STEP_COUNT)),
+    variation: (rawVar >= 1 && rawVar <= 5 ? rawVar : 0) as VariationCode,
+    fill: o.fill === true,
+    auto_fill_bars: autoFillBars,
+    kit_model: Math.round(clamp(num(o.kit_model, 0), 0, 7)),
+    cymbal_mode: Math.round(clamp(num(o.cymbal_mode, 0), 0, 3)),
     voices,
     render: {
       output_gain: round(clamp(num(renderIn.output_gain, 1), 0, GAIN_MAX), 4),
@@ -149,22 +244,76 @@ export function sanitize(input: unknown): PatternSpec {
 
 // ---- wire format ----
 
-type WireVoice = { steps: string } & Partial<Record<ControlId, number>> & { mute?: true };
+type WireVoice = {
+  steps: string;
+  steps_b?: string;
+  steps_c?: string;
+  steps_d?: string;
+  steps_fill?: string;
+  echo_send?: number;
+  reverb_send?: number;
+  filter_send?: number;
+  mute?: true;
+  solo?: true;
+} & Partial<Record<ControlId, number>>;
 
 /** The compact JSON object the core and the URL carry. */
 export function toWire(spec: PatternSpec): Record<string, unknown> {
   const voices: Record<string, WireVoice> = {};
   for (const id of VOICE_IDS) {
     const v = spec.voices[id];
-    const w: WireVoice = { steps: normalizeSteps(v.steps) };
-    let interesting = w.steps !== EMPTY_STEPS || v.mute;
+    const normA = normalizeSteps(v.steps);
+    const w: WireVoice = { steps: normA };
+    let interesting = normA !== EMPTY_STEPS || v.mute || v.solo;
+    if (typeof v.steps_b === "string") {
+      const normB = normalizeSteps(v.steps_b);
+      if (normB !== normA) {
+        w.steps_b = normB;
+        interesting = true;
+      }
+    }
+    if (typeof v.steps_c === "string") {
+      const normC = normalizeSteps(v.steps_c);
+      if (normC !== normA) {
+        w.steps_c = normC;
+        interesting = true;
+      }
+    }
+    if (typeof v.steps_d === "string") {
+      const normD = normalizeSteps(v.steps_d);
+      const fallbackD = typeof v.steps_b === "string" ? normalizeSteps(v.steps_b) : normA;
+      if (normD !== fallbackD) {
+        w.steps_d = normD;
+        interesting = true;
+      }
+    }
+    if (typeof v.steps_fill === "string") {
+      const normF = normalizeSteps(v.steps_fill);
+      if (normF !== EMPTY_STEPS && normF !== normA) {
+        w.steps_fill = normF;
+        interesting = true;
+      }
+    }
     for (const c of CONTROL_IDS) {
       if (v[c] !== CONTROL_DEFAULTS[c]) {
         w[c] = v[c];
         interesting = true;
       }
     }
+    if (v.echo_send > 0) {
+      w.echo_send = v.echo_send;
+      interesting = true;
+    }
+    if (v.reverb_send > 0) {
+      w.reverb_send = v.reverb_send;
+      interesting = true;
+    }
+    if (v.filter_send > 0) {
+      w.filter_send = v.filter_send;
+      interesting = true;
+    }
     if (v.mute) w.mute = true;
+    if (v.solo) w.solo = true;
     if (interesting) voices[id] = w;
   }
   const wire: Record<string, unknown> = {
@@ -174,6 +323,13 @@ export function toWire(spec: PatternSpec): Record<string, unknown> {
     flam: spec.flam,
     voices,
   };
+  if (spec.humanize > 0) wire.humanize = spec.humanize;
+  if (spec.last_step !== STEP_COUNT) wire.last_step = spec.last_step;
+  if (spec.variation !== 0) wire.variation = spec.variation;
+  if (spec.fill) wire.fill = true;
+  if (spec.auto_fill_bars > 0) wire.auto_fill_bars = spec.auto_fill_bars;
+  if (spec.kit_model > 0) wire.kit_model = spec.kit_model;
+  if (spec.cymbal_mode > 0) wire.cymbal_mode = spec.cymbal_mode;
   if (spec.render.output_gain !== 1 || spec.render.limiter) {
     wire.render = { output_gain: spec.render.output_gain, limiter: spec.render.limiter };
   }

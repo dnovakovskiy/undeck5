@@ -1,7 +1,7 @@
 use sync::ClockSource;
 
 use crate::queue::Producer;
-use crate::{Event, Pattern, VoiceId};
+use crate::{Event, Pattern, Step, VariationMode, VoiceId};
 
 /// Queue slots the scheduler always leaves free, so a flush (sent when the
 /// timeline jumps) still fits however full the scheduler and parameter
@@ -124,22 +124,125 @@ impl Scheduler {
     }
 
     /// The samples `step`'s earliest event and its grid hit are queued at on
-    /// `clock`: the earliest is a flam's grace note when the step has one,
-    /// otherwise the grid hit itself.
+    /// `clock`: the earliest is a flam's grace note (or early humanize offset)
+    /// when active, otherwise the grid hit itself.
     #[must_use]
     pub fn step_span<C: ClockSource>(&self, clock: &C, step: u64) -> (u64, u64) {
         let sample = self.step_sample(clock, step);
-        let index = (step % crate::STEP_COUNT as u64) as usize;
         let flam = VoiceId::ALL.into_iter().any(|voice| {
-            let track = self.pattern.track(voice);
-            let s = track.steps[index];
-            !track.mute && s.on && s.flam
+            let (s, mute) = self.resolve_step(voice, step);
+            !mute && s.on && s.flam
         });
-        if flam {
-            (sample.saturating_sub(self.flam_samples(clock)), sample)
+        let mut earliest = if flam {
+            sample.saturating_sub(self.flam_samples(clock))
         } else {
-            (sample, sample)
+            sample
+        };
+        if self.pattern.humanize > 0.0 {
+            let early_human =
+                (0.006 * f64::from(self.pattern.humanize.clamp(0.0, 1.0)) * clock.sample_rate())
+                    .ceil() as u64;
+            earliest = earliest.saturating_sub(early_human);
         }
+        (earliest, sample)
+    }
+
+    fn effective_len(&self) -> u64 {
+        self.pattern.effective_step_count() as u64
+    }
+
+    fn resolve_step(&self, voice: VoiceId, absolute_step: u64) -> (Step, bool) {
+        let len = self.effective_len();
+        let index = (absolute_step % len) as usize;
+        let bar = absolute_step / len;
+        let v_idx = voice.index();
+        let base_track = match self.pattern.variation {
+            VariationMode::A => &self.pattern.tracks[v_idx],
+            VariationMode::B => {
+                if self.pattern.has_b {
+                    &self.pattern.tracks_b[v_idx]
+                } else {
+                    &self.pattern.tracks[v_idx]
+                }
+            }
+            VariationMode::C => {
+                if self.pattern.has_c {
+                    &self.pattern.tracks_c[v_idx]
+                } else {
+                    &self.pattern.tracks[v_idx]
+                }
+            }
+            VariationMode::D => {
+                if self.pattern.has_d {
+                    &self.pattern.tracks_d[v_idx]
+                } else {
+                    &self.pattern.tracks[v_idx]
+                }
+            }
+            VariationMode::AB => {
+                if self.pattern.has_b && bar % 2 == 1 {
+                    &self.pattern.tracks_b[v_idx]
+                } else {
+                    &self.pattern.tracks[v_idx]
+                }
+            }
+            VariationMode::ABCD => match bar % 4 {
+                0 => &self.pattern.tracks[v_idx],
+                1 => {
+                    if self.pattern.has_b {
+                        &self.pattern.tracks_b[v_idx]
+                    } else {
+                        &self.pattern.tracks[v_idx]
+                    }
+                }
+                2 => {
+                    if self.pattern.has_c {
+                        &self.pattern.tracks_c[v_idx]
+                    } else {
+                        &self.pattern.tracks[v_idx]
+                    }
+                }
+                _ => {
+                    if self.pattern.has_d {
+                        &self.pattern.tracks_d[v_idx]
+                    } else if self.pattern.has_b {
+                        &self.pattern.tracks_b[v_idx]
+                    } else {
+                        &self.pattern.tracks[v_idx]
+                    }
+                }
+            },
+        };
+        let fill_on = self.pattern.fill_active
+            || (self.pattern.auto_fill_bars >= 2
+                && (bar + 1) % u64::from(self.pattern.auto_fill_bars) == 0);
+        if !fill_on {
+            return (base_track.steps[index], base_track.mute);
+        }
+        if self.pattern.has_fill {
+            let ft = &self.pattern.tracks_fill[v_idx];
+            return (ft.steps[index], base_track.mute || ft.mute);
+        }
+        // Non-destructive TR-8S turnaround fill on the final 4 steps of the bar.
+        let len_usize = len as usize;
+        let tail_start = len_usize.saturating_sub(4);
+        if len_usize >= 8 && index >= tail_start && !base_track.mute {
+            let rel = index - tail_start;
+            let base = base_track.steps[index];
+            let filled = match (voice, rel) {
+                (VoiceId::Snare, 0 | 1) => Step::ON,
+                (VoiceId::Snare, 2) => Step::FLAM,
+                (VoiceId::Snare, 3) => Step::ACCENT,
+                (VoiceId::HighTom, 0) if !base.on => Step::ON,
+                (VoiceId::MidTom, 1) if !base.on => Step::ON,
+                (VoiceId::LowTom, 2) if !base.on => Step::ACCENT,
+                (VoiceId::Kick, 2) if !base.on => Step::ON,
+                (VoiceId::OpenHat, 3) if !base.on => Step::ON,
+                _ => base,
+            };
+            return (filled, false);
+        }
+        (base_track.steps[index], base_track.mute)
     }
 
     fn flam_samples<C: ClockSource>(&self, clock: &C) -> u64 {
@@ -179,10 +282,10 @@ impl Scheduler {
         self.next_step
     }
 
-    /// Pattern-relative index (`0..16`) of the next step.
+    /// Pattern-relative index (`0..last_step`) of the next step.
     #[must_use]
     pub fn next_pattern_step(&self) -> usize {
-        (self.next_step % crate::STEP_COUNT as u64) as usize
+        (self.next_step % self.effective_len()) as usize
     }
 
     /// Emits every step that falls before `horizon`. Returns the number of
@@ -197,6 +300,8 @@ impl Scheduler {
             return 0;
         }
         let mut pushed = 0;
+        let humanize = self.pattern.humanize.clamp(0.0, 1.0);
+        let sr = clock.sample_rate();
         loop {
             if self.stop_at.is_some_and(|end| self.next_step >= end) {
                 self.playing = false;
@@ -212,24 +317,37 @@ impl Scheduler {
             if out.vacant() < 2 * VoiceId::COUNT + FLUSH_RESERVE {
                 break;
             }
-            let index = self.next_pattern_step();
             let flam_samples = self.flam_samples(clock);
             for voice in VoiceId::ALL {
-                let track = self.pattern.track(voice);
-                if track.mute {
+                let (step, mute) = self.resolve_step(voice, self.next_step);
+                if mute {
                     continue;
                 }
-                let step = track.steps[index];
                 if step.on {
-                    let velocity = self.pattern.velocity(step);
+                    let mut hit_sample = sample;
+                    let mut velocity = self.pattern.velocity(step);
+                    if humanize > 0.0 {
+                        let (u_time, u_vel) = humanize_pair(self.next_step, voice.index());
+                        let offset_s = match voice {
+                            VoiceId::Kick => u_time * 0.0012,
+                            VoiceId::Snare | VoiceId::Clap | VoiceId::Rim => {
+                                // Subtle pocket bias: -2 ms to +7.5 ms at full humanize.
+                                0.00275 + u_time * 0.00475
+                            }
+                            _ => u_time * 0.0050,
+                        };
+                        let delta = (offset_s * f64::from(humanize) * sr).round() as i64;
+                        hit_sample = (sample as i64 + delta).max(0) as u64;
+                        velocity = (velocity * (1.0 + 0.14 * humanize * u_vel)).clamp(0.08, 1.0);
+                    }
                     // Cannot fail: vacancy was checked above.
                     if step.flam {
-                        let grace_at = sample.saturating_sub(flam_samples);
+                        let grace_at = hit_sample.saturating_sub(flam_samples);
                         let grace = velocity * crate::FLAM_GRACE_RATIO;
                         let _ = out.push(Event::trigger(grace_at, voice, grace));
                         pushed += 1;
                     }
-                    let _ = out.push(Event::trigger(sample, voice, velocity));
+                    let _ = out.push(Event::trigger(hit_sample, voice, velocity));
                     pushed += 1;
                 }
             }
@@ -237,6 +355,21 @@ impl Scheduler {
         }
         pushed
     }
+}
+
+/// Deterministic, allocation-free bipolar hash `(u_time, u_vel)` in `[-1.0, 1.0]`.
+#[inline]
+fn humanize_pair(step: u64, voice: usize) -> (f64, f32) {
+    let mut z = step
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add((voice as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9))
+        .wrapping_add(0x94D0_49BB_1331_11EB);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^= z >> 31;
+    let a = ((z & 0xFFFF_FFFF) as f64) * (2.0 / 4_294_967_295.0) - 1.0;
+    let b = (((z >> 32) as u32) as f32) * (2.0 / 4_294_967_295.0) - 1.0;
+    (a, b)
 }
 
 #[cfg(test)]

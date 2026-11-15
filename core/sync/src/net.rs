@@ -93,6 +93,11 @@ pub enum SourceEvent {
         /// The message.
         message: String,
     },
+    /// Peer transport start/stop state changed (e.g. Ableton Link start/stop sync).
+    Transport {
+        /// `true` when peer session started playing, `false` when stopped.
+        playing: bool,
+    },
 }
 
 /// Which device a network source should follow.
@@ -115,10 +120,16 @@ pub struct SourceHandle {
 }
 
 /// Instructions to a running source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SourceCommand {
     /// Change which device to follow.
     Follow(FollowTarget),
+    /// Commit a new tempo (BPM) to a peer session that supports bidirectional tempo (e.g. Link).
+    SetTempo(f64),
+    /// Enable or disable transport start/stop sync (e.g. Ableton Link).
+    SetStartStopSync(bool),
+    /// Commit transport play/stop state to a peer session when start/stop sync is enabled.
+    SetPlaying(bool),
 }
 
 /// What a source thread gets to work with.

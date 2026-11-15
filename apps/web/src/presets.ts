@@ -10,6 +10,7 @@ export interface KitPreset {
   id: string;
   name: string;
   shortKey: string;
+  kitModel: number;
   blurb: string;
   accent?: number;
   flam?: number;
@@ -36,6 +37,7 @@ export const KITS: readonly KitPreset[] = [
     id: "sub-boom",
     name: "TR-8O8 · Sub Boom",
     shortKey: "Y",
+    kitModel: 1,
     blurb: "Deep 44 Hz long-decay bridged-T sub kick, dry snappy snare, 4-burst room clap, 540/800 Hz cowbell & conga toms",
     accent: 0.65,
     flam: 0.45,
@@ -56,6 +58,7 @@ export const KITS: readonly KitPreset[] = [
     id: "club-punch",
     name: "TR-9O9 · Club Punch",
     shortKey: "U",
+    kitModel: 2,
     blurb: "Hard-hitting 72 Hz pitch-swept club kick, fat dual-shell wire snare, tight clap & bright sizzle hats",
     accent: 0.74,
     flam: 0.42,
@@ -76,6 +79,7 @@ export const KITS: readonly KitPreset[] = [
     id: "studio-disco",
     name: "TR-7O7 · Studio Matrix",
     shortKey: "I",
+    kitModel: 3,
     blurb: "Crisp 80s digital-matrix studio kit: tight dry punch kick, gated snare, wide disco clap, cowbell & woody rim",
     accent: 0.6,
     flam: 0.36,
@@ -96,6 +100,7 @@ export const KITS: readonly KitPreset[] = [
     id: "silver-electro",
     name: "TR-6O6 · Acid Silver",
     shortKey: "O",
+    kitModel: 4,
     blurb: "Fast transistor Drumatix kit: 76 Hz resonant thump kick, papery high-wire snare, sizzling metallic hats & high toms",
     accent: 0.68,
     flam: 0.38,
@@ -116,6 +121,7 @@ export const KITS: readonly KitPreset[] = [
     id: "warehouse-raw",
     name: "TR-9O9 · Rave Overdrive",
     shortKey: "P",
+    kitModel: 5,
     blurb: "Overdriven Berlin/warehouse techno kit: saturated kick, sub-bass rumble tom, dark room clap & cutting open hats",
     accent: 0.82,
     flam: 0.5,
@@ -136,6 +142,7 @@ export const KITS: readonly KitPreset[] = [
     id: "latin-perc",
     name: "TR-72x · Latin Percussion",
     shortKey: "72x",
+    kitModel: 6,
     blurb: "Latin & Afro-house percussion unit: Bongo/Conga/Quinto toms, Agogo bell, Timbale rimshot & Cabasa/Maraca shakers",
     accent: 0.68,
     flam: 0.48,
@@ -156,6 +163,7 @@ export const KITS: readonly KitPreset[] = [
     id: "vintage-cr78",
     name: "CR-78 · Vintage Rhythm",
     shortKey: "CR",
+    kitModel: 7,
     blurb: "Late-70s wooden-box analog rhythm machine: soft round organ kick, brush snare, hollow woodblock clave & tambourine chime",
     accent: 0.55,
     flam: 0.35,
@@ -172,6 +180,27 @@ export const KITS: readonly KitPreset[] = [
       cowbell: { tune: 0.78, decay: 0.82, tone: 0.32, snappy: 0.5, level: 0.8 },
     },
   },
+  {
+    id: "classic",
+    name: "TR Reference · Studio Core",
+    shortKey: "REF",
+    kitModel: 0,
+    blurb: "Balanced reference TR analog studio synthesis across all 10 drum voices",
+    accent: 0.6,
+    flam: 0.45,
+    voices: {
+      kick: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 1 },
+      snare: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 1 },
+      low_tom: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.8 },
+      mid_tom: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.8 },
+      high_tom: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.8 },
+      rim: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.75 },
+      clap: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.85 },
+      closed_hat: { tune: 0.5, decay: 0.35, tone: 0.5, snappy: 0.5, level: 0.75 },
+      open_hat: { tune: 0.5, decay: 0.6, tone: 0.5, snappy: 0.5, level: 0.8 },
+      cowbell: { tune: 0.5, decay: 0.5, tone: 0.5, snappy: 0.5, level: 0.75 },
+    },
+  },
 ];
 
 /**
@@ -180,6 +209,7 @@ export const KITS: readonly KitPreset[] = [
  */
 export function applyKitToSpec(current: PatternSpec, kit: KitPreset): PatternSpec {
   const next: PatternSpec = JSON.parse(JSON.stringify(current));
+  next.kit_model = kit.kitModel;
   if (kit.accent !== undefined) next.accent = kit.accent;
   if (kit.flam !== undefined) next.flam = kit.flam;
   for (const v of VOICES) {

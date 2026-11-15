@@ -45,7 +45,9 @@ export interface BridgeEvents {
    * should re-sync at once rather than confirm the jump first.
    */
   onDeviceChange?(device: number): void;
-  /** ~20 Hz while locked: at performance time `ms` the source was at `phase`. */
+  /** External transport start/stop event (e.g. Ableton Link Start/Stop Sync). */
+  onTransport?(playing: boolean): void;
+  /** ~40 Hz while locked: at performance time `ms` the source was at `phase`. */
   onObservation(ms: number, kind: number, phase: number, bpm: number, precision: Precision): void;
 }
 
@@ -55,7 +57,7 @@ const PING_BURST = 8;
 const PING_BURST_SPACING_MS = 40;
 const PING_INTERVAL_MS = 2000;
 const OFFSET_WINDOW = 16;
-const OBSERVE_INTERVAL_MS = 50;
+const OBSERVE_INTERVAL_MS = 25;
 const BACKOFF_MIN_MS = 500;
 const BACKOFF_MAX_MS = 10_000;
 
@@ -95,9 +97,11 @@ export class BridgeClient {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private burstTimers: ReturnType<typeof setTimeout>[] = [];
   private observeTimer: ReturnType<typeof setInterval> | null = null;
+  private tickerWorker: Worker | null = null;
   private nextPingId = 1;
   private followTarget: "master" | number | null = null;
-  private desiredSource: "prolink" | "link" | "opus" | "sim" | null = null;
+  private desiredSource: "prolink" | "link" | "opus" | "sim" | "booth" | null = null;
+  private linkStartStop: boolean | null = null;
   /** Device of the last on-target locked timeline (kept across reconnects). */
   private heardDevice: number | null = null;
   private samples: { rtt: number; offsetUs: number }[] = [];
@@ -148,11 +152,61 @@ export class BridgeClient {
 
   /**
    * Asks the bridge to switch its upstream network clock protocol
-   * ("prolink", "link" for Ableton Link, "opus", or "sim").
+   * ("prolink", "link" for Ableton Link, "opus", "sim", or "booth" to return
+   * from "link" to Pro DJ Link while leaving "opus"/"sim" untouched).
    */
-  setSource(source: "prolink" | "link" | "opus" | "sim"): void {
+  setSource(source: "prolink" | "link" | "opus" | "sim" | "booth"): void {
     this.desiredSource = source;
-    this.sendJson({ type: "source", source });
+    if (source !== "booth") {
+      this.sendJson({ type: "source", source });
+    }
+  }
+
+  /** Commits a new BPM to the active Ableton Link session via the bridge. */
+  setLinkTempo(bpm: number): void {
+    if (Number.isFinite(bpm) && bpm >= 20 && bpm <= 400) {
+      this.sendJson({ type: "link-tempo", bpm });
+    }
+  }
+
+  /** Enables or disables Ableton Link Start/Stop transport sync on the bridge. */
+  setLinkStartStop(enabled: boolean): void {
+    this.linkStartStop = enabled;
+    this.sendJson({ type: "link-start-stop", enabled });
+  }
+
+  /** Publishes play/stop state to Ableton Link peers when Start/Stop Sync is enabled. */
+  setLinkPlay(playing: boolean): void {
+    this.sendJson({ type: "link-play", playing });
+  }
+
+  private startObserveTicker(): void {
+    if (!__P5_SINGLE__ && typeof Worker === "function" && typeof Blob === "function") {
+      try {
+        const blob = new Blob([`setInterval(()=>postMessage(0),${OBSERVE_INTERVAL_MS});`], {
+          type: "text/javascript",
+        });
+        const url = URL.createObjectURL(blob);
+        try {
+          const w = new Worker(url);
+          w.onmessage = () => this.emitObservation();
+          w.onerror = () => {
+            w.terminate();
+            if (this.tickerWorker === w) this.tickerWorker = null;
+            if (!this.observeTimer) {
+              this.observeTimer = setInterval(() => this.emitObservation(), OBSERVE_INTERVAL_MS);
+            }
+          };
+          this.tickerWorker = w;
+          return;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      } catch {
+        /* CSP or worker restriction: fall back to main-thread interval */
+      }
+    }
+    this.observeTimer = setInterval(() => this.emitObservation(), OBSERVE_INTERVAL_MS);
   }
 
   private open(): void {
@@ -176,7 +230,7 @@ export class BridgeClient {
         this.burstTimers.push(setTimeout(() => this.ping(), i * PING_BURST_SPACING_MS));
       }
       this.pingTimer = setInterval(() => this.ping(), PING_INTERVAL_MS);
-      this.observeTimer = setInterval(() => this.emitObservation(), OBSERVE_INTERVAL_MS);
+      this.startObserveTicker();
     };
     ws.onmessage = (e: MessageEvent) => {
       if (typeof e.data === "string") this.onText(e.data);
@@ -209,9 +263,15 @@ export class BridgeClient {
   private clearTimers(): void {
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.observeTimer) clearInterval(this.observeTimer);
+    if (this.tickerWorker) {
+      this.tickerWorker.onmessage = null;
+      this.tickerWorker.onerror = null;
+      this.tickerWorker.terminate();
+    }
     for (const t of this.burstTimers) clearTimeout(t);
     this.pingTimer = null;
     this.observeTimer = null;
+    this.tickerWorker = null;
     this.burstTimers = [];
   }
 
@@ -238,10 +298,18 @@ export class BridgeClient {
           this.events.onStatus("warn", `bridge speaks protocol ${String(msg.protocol)}, expected 1`);
         }
         this.events.onHello?.(msg as { app?: string; version?: string; source?: string });
-        if (this.desiredSource !== null && msg.source !== this.desiredSource) {
+        if (this.desiredSource === "booth") {
+          if (msg.source === "link") this.sendJson({ type: "source", source: "prolink" });
+        } else if (this.desiredSource !== null && msg.source !== this.desiredSource) {
           this.sendJson({ type: "source", source: this.desiredSource });
         }
+        if (this.linkStartStop !== null) {
+          this.sendJson({ type: "link-start-stop", enabled: this.linkStartStop });
+        }
         if (this.followTarget !== null) this.sendJson({ type: "follow", target: this.followTarget });
+        break;
+      case "transport":
+        if (typeof msg.playing === "boolean") this.events.onTransport?.(msg.playing);
         break;
       case "pong":
         this.onPong(msg);

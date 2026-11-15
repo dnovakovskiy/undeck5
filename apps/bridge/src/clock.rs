@@ -29,6 +29,7 @@ pub struct BridgeClock {
     bar_aligned: bool,
     device: Option<u8>,
     seen: bool,
+    immediate_timeline: bool,
 }
 
 impl BridgeClock {
@@ -42,6 +43,7 @@ impl BridgeClock {
             bar_aligned: false,
             device: None,
             seen: false,
+            immediate_timeline: false,
         }
     }
 
@@ -56,6 +58,8 @@ impl BridgeClock {
                 precision,
                 device,
             } => {
+                let prev_bpm = self.follower.tempo_bpm();
+                let device_changed = self.seen && device != self.device;
                 if self.follower.precision() != precision {
                     self.follower.set_precision(precision);
                 }
@@ -64,7 +68,7 @@ impl BridgeClock {
                 // as a phase jump of the old one to be confirmed, which
                 // would label the old device's phase with the new number
                 // for a while and then jump.
-                if self.seen && device != self.device {
+                if device_changed {
                     self.follower.request_resync();
                 }
                 let obs = Observation {
@@ -73,8 +77,16 @@ impl BridgeClock {
                     bpm,
                 };
                 self.follower.observe(&obs, now as f64);
-                let _ = self.follower.take_discontinuity();
-                self.bar_aligned = matches!(phase, Phase::Bar(_));
+                let jumped = self.follower.take_discontinuity();
+                let bpm_moved = (self.follower.tempo_bpm() - prev_bpm).abs() > 0.01;
+                let packet_beat =
+                    matches!(self.source, "prolink" | "opus") && !matches!(phase, Phase::TempoOnly);
+                if !self.seen || device_changed || jumped || bpm_moved || packet_beat {
+                    self.immediate_timeline = true;
+                }
+                if !matches!(phase, Phase::TempoOnly) {
+                    self.bar_aligned = matches!(phase, Phase::Bar(_));
+                }
                 self.device = device;
                 self.seen = true;
                 None
@@ -84,7 +96,14 @@ impl BridgeClock {
                 if warning { "warn" } else { "info" },
                 &message,
             )),
+            SourceEvent::Transport { playing } => Some(transport_message(playing)),
         }
+    }
+
+    /// Returns `true` (and clears the flag) when an observation warrants an
+    /// immediate `timeline` broadcast rather than waiting for the 50 ms tick.
+    pub fn take_immediate_timeline(&mut self) -> bool {
+        std::mem::take(&mut self.immediate_timeline)
     }
 
     /// Advances lock tracking to `now`.
@@ -167,6 +186,12 @@ pub fn devices_message(devices: &[DeviceInfo]) -> String {
 #[must_use]
 pub fn status_message(level: &str, message: &str) -> String {
     json!({ "type": "status", "level": level, "message": message }).to_string()
+}
+
+/// A `transport` start/stop message (e.g. Ableton Link start/stop sync).
+#[must_use]
+pub fn transport_message(playing: bool) -> String {
+    json!({ "type": "transport", "playing": playing }).to_string()
 }
 
 /// The `pong` reply to a ping (fields echoed as received).
@@ -258,5 +283,11 @@ mod tests {
         let v: Value = serde_json::from_str(&m).unwrap();
         assert_eq!(v["type"], "devices");
         assert!(v["devices"].as_array().unwrap().is_empty());
+        let m = c
+            .handle(SourceEvent::Transport { playing: true }, 0)
+            .unwrap();
+        let v: Value = serde_json::from_str(&m).unwrap();
+        assert_eq!(v["type"], "transport");
+        assert_eq!(v["playing"], true);
     }
 }

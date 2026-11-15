@@ -2,7 +2,7 @@
 // quick-start guides (Step Sequencer vs RMX-1000 Station), and MacBook Air
 // keyboard map for player5.
 
-export type GuideMode = "sequencer" | "rmx";
+export type GuideMode = "sequencer" | "djs" | "rmx";
 
 export interface Chapter {
   id: number;
@@ -298,8 +298,10 @@ export class HowToExplainer {
   private readonly keyFeedbackEl: HTMLElement;
   private readonly chapterBtns: HTMLButtonElement[];
   private readonly modeSeqBtn: HTMLButtonElement;
+  private readonly modeDjsBtn: HTMLButtonElement | null;
   private readonly modeRmxBtn: HTMLButtonElement;
   private readonly qsSeqEl: HTMLElement;
+  private readonly qsDjsEl: HTMLElement | null;
   private readonly qsRmxEl: HTMLElement;
   private readonly kbHeadingEl: HTMLElement;
 
@@ -328,8 +330,10 @@ export class HowToExplainer {
     this.keyFeedbackEl = root.querySelector<HTMLElement>("#howto-live-key")!;
     this.chapterBtns = [...root.querySelectorAll<HTMLButtonElement>("[data-howto-chapter]")];
     this.modeSeqBtn = root.querySelector<HTMLButtonElement>("#howto-mode-seq")!;
+    this.modeDjsBtn = root.querySelector<HTMLButtonElement>("#howto-mode-djs");
     this.modeRmxBtn = root.querySelector<HTMLButtonElement>("#howto-mode-rmx")!;
     this.qsSeqEl = root.querySelector<HTMLElement>("#howto-qs-seq")!;
+    this.qsDjsEl = root.querySelector<HTMLElement>("#howto-qs-djs");
     this.qsRmxEl = root.querySelector<HTMLElement>("#howto-qs-rmx")!;
     this.kbHeadingEl = root.querySelector<HTMLElement>("#howto-kb-title")!;
 
@@ -346,18 +350,19 @@ export class HowToExplainer {
     return this.guideMode;
   }
 
-  setGuideMode(mode: GuideMode): void {
-    if (this.guideMode === mode) return;
-    this.guideMode = mode;
+  setGuideMode(mode: GuideMode | "booth"): void {
+    const resolved: GuideMode = mode === "rmx" ? "rmx" : mode === "djs" ? "djs" : "sequencer";
+    if (this.guideMode === resolved) return;
+    this.guideMode = resolved;
     this.currentSec = 0;
     this.syncGuideModeDom();
     this.renderUi();
     if (this.openState) this.drawFrame();
   }
 
-  open(mode?: GuideMode): void {
+  open(mode?: GuideMode | "booth"): void {
     if (mode) {
-      this.guideMode = mode;
+      this.guideMode = mode === "rmx" ? "rmx" : mode === "djs" ? "djs" : "sequencer";
       this.syncGuideModeDom();
     }
     if (this.openState) return;
@@ -381,7 +386,7 @@ export class HowToExplainer {
     this.renderUi();
   }
 
-  toggle(mode?: GuideMode): void {
+  toggle(mode?: GuideMode | "booth"): void {
     if (this.openState) this.close();
     else this.open(mode);
   }
@@ -410,10 +415,14 @@ export class HowToExplainer {
 
   private syncGuideModeDom(): void {
     const isRmx = this.guideMode === "rmx";
+    const isDjs = this.guideMode === "djs";
+    const isSeq = this.guideMode === "sequencer";
     this.modal.dataset.guideMode = this.guideMode;
-    this.modeSeqBtn.setAttribute("aria-pressed", String(!isRmx));
+    this.modeSeqBtn.setAttribute("aria-pressed", String(isSeq));
+    this.modeDjsBtn?.setAttribute("aria-pressed", String(isDjs));
     this.modeRmxBtn.setAttribute("aria-pressed", String(isRmx));
-    this.qsSeqEl.hidden = isRmx;
+    this.qsSeqEl.hidden = !isSeq;
+    if (this.qsDjsEl) this.qsDjsEl.hidden = !isDjs;
     this.qsRmxEl.hidden = !isRmx;
 
     const chapters = this.activeChapters();
@@ -424,7 +433,9 @@ export class HowToExplainer {
 
     this.kbHeadingEl.textContent = isRmx
       ? "MacBook Air Key Map · RMX-1000 Station Mode"
-      : "MacBook Air Key Map · Step Sequencer Mode";
+      : isDjs
+        ? "MacBook Air Key Map · Pioneer DJS-1000 Deck Mode"
+        : "MacBook Air Key Map · Step Sequencer Mode";
 
     for (const cap of this.modal.querySelectorAll<HTMLElement>("[data-key-code]")) {
       const subText = (isRmx ? cap.dataset.rmxSub : cap.dataset.seqSub) ?? "";
@@ -438,7 +449,8 @@ export class HowToExplainer {
 
   private bind(root: HTMLElement): void {
     root.querySelector<HTMLButtonElement>("#how-to-btn")?.addEventListener("click", () => {
-      const currentSurface = root.dataset.surface === "rmx" ? "rmx" : "sequencer";
+      const s = root.dataset.surface;
+      const currentSurface: GuideMode = s === "rmx" ? "rmx" : s === "djs" ? "djs" : "sequencer";
       this.toggle(currentSurface);
     });
     root.querySelector<HTMLButtonElement>("#howto-close")?.addEventListener("click", () => this.close());
@@ -447,6 +459,7 @@ export class HowToExplainer {
     });
 
     this.modeSeqBtn.addEventListener("click", () => this.setGuideMode("sequencer"));
+    this.modeDjsBtn?.addEventListener("click", () => this.setGuideMode("djs"));
     this.modeRmxBtn.addEventListener("click", () => this.setGuideMode("rmx"));
 
     this.playBtn.addEventListener("click", () => {
@@ -1536,6 +1549,7 @@ export function howToModalMarkup(): string {
         </div>
         <div class="howto-mode-tabs" role="group" aria-label="Choose guide section">
           <button id="howto-mode-seq" type="button" class="howto-mode-tab" aria-pressed="true">Step Sequencer Guide</button>
+          <button id="howto-mode-djs" type="button" class="howto-mode-tab" aria-pressed="false">DJS-1000 Deck Guide</button>
           <button id="howto-mode-rmx" type="button" class="howto-mode-tab" aria-pressed="false">RMX-1000 Station Guide</button>
         </div>
         <button id="howto-close" type="button" class="small" aria-label="Close How To guide">Close (Esc)</button>
@@ -1566,10 +1580,29 @@ export function howToModalMarkup(): string {
           </li>
         </ol>
 
+        <ol class="howto-steps" id="howto-qs-djs" hidden>
+          <li>
+            <strong>1. CDJ-Format Standalone DJ Sampler &amp; 64-Step Sequencer:</strong>
+            Open <strong>DJS-1000 Deck</strong> (or click <strong>DJS-1000 ⇄</strong> inside <strong>Booth Split</strong>) for a Pioneer CDJ-footprint booth sequencer that locks directly to <strong>Pro DJ Link</strong> (Bridge), <strong>Ableton Link</strong>, or <strong>MIDI</strong>. Launch 4-bar club progressions on the top 7" screen via <strong>Scenes S1–S8</strong> or snapshot your live groove with <strong>Capture Scene</strong>.
+          </li>
+          <li>
+            <strong>2. 4×4 Multicolor RGB Performance Pads (4 Modes):</strong>
+            Switch pad modes between <strong>TRACK PLAY</strong> (10 quantized drum voices + 6 macro FX throws), <strong>MUTE / SOLO</strong> (instant booth stem cuts &amp; <em>ALL ON</em> drop), <strong>16-PAD PITCH</strong> (chromatic basslines/melodies on the selected voice), and <strong>HOT ROLL</strong> (16 division × pitch rolls).
+          </li>
+          <li>
+            <strong>3. Left Touch Strip &amp; Right CDJ Pitch / Beat Sync Strip:</strong>
+            Hold <strong>1/4..1/32</strong> on the left <strong>Touch Strip</strong> for quantized Note Repeat or spring-return Pitch Bend, and beatmatch manually or lock via <strong>BEAT SYNC</strong>, <strong>NUDGE −/+</strong>, <strong>±6% Tempo Slider</strong>, and <strong>CUE</strong> on the right CDJ strip.
+          </li>
+          <li>
+            <strong>4. Front-Edge 16-Step Multicolor Strip &amp; 64-Step Bar Chaining:</strong>
+            Program or live-record (<strong>LIVE REC</strong>) across 4 bars (<strong>A / B / C / D</strong> or <strong>A–D 64-Step Chain</strong>) — every edit syncs live with the TR Step Sequencer and RMX-1000 Station!
+          </li>
+        </ol>
+
         <ol class="howto-steps" id="howto-qs-rmx" hidden>
           <li>
-            <strong>1. Open the RMX-1000 Station &amp; trigger X-Pad drums (<kbd>\`</kbd> / <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> / <kbd>1</kbd>–<kbd>4</kbd>):</strong>
-            Click <strong>RMX-1000 Station</strong> in the top bar (or press <kbd>\`</kbd>). Hit <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> to trigger the 4 <strong>X-Pad</strong> drum slots live, and toggle <strong>Bank A / Bank B</strong> to switch between <em>BD/SD/CP/CH</em> and <em>LT/MT/HT/CB</em>.
+            <strong>1. Open RMX-1000 Station or MacBook Air 13" Booth Split (<kbd>\`</kbd> / <kbd>⇧+\`</kbd> / <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd>):</strong>
+            Click <strong>RMX-1000 Station</strong> (<kbd>\`</kbd>) or <strong>Booth Split</strong> (<kbd>⇧+\`</kbd>) for a zero-scroll 13" MacBook Air split cockpit showing both the TR-8S Sequencer and RMX-1000 side-by-side! Hit <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> or <kbd>1</kbd>–<kbd>4</kbd> to trigger the 4 <strong>X-Pad</strong> drum slots live.
           </li>
           <li>
             <strong>2. Perform Touch-Ribbon Beat Rolls &amp; Overdub (<kbd>5</kbd>–<kbd>0</kbd>):</strong>

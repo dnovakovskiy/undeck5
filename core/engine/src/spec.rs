@@ -25,7 +25,7 @@
 use serde::{Deserialize, Serialize};
 
 use dsp::{KickParams, VoiceParams};
-use sequencer::{Pattern, PatternParseError, Track, VoiceId};
+use sequencer::{Pattern, PatternParseError, Track, VariationMode, VoiceId};
 
 use crate::Engine;
 
@@ -45,6 +45,30 @@ pub struct PatternSpec {
     /// Flam spacing `0..=1`.
     #[serde(default = "default_half")]
     pub flam: f32,
+    /// Non-destructive organic micro-timing and velocity humanize `0..=1`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub humanize: f32,
+    /// Active loop length in steps (`1..=16`, default `16`).
+    #[serde(
+        default = "default_last_step",
+        skip_serializing_if = "is_default_last_step"
+    )]
+    pub last_step: u8,
+    /// Bar variation mode (`0` = A, `1` = B, `2` = AB, `3` = C, `4` = D, `5` = ABCD 64-step).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub variation: u8,
+    /// Momentary non-destructive `[FILL]` hold.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub fill: bool,
+    /// Auto-fill turnaround interval in bars (`0` = off, `2`, `4`, `8`).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub auto_fill_bars: u8,
+    /// Multi-era drum kit voice model (`0` = Classic reference, `1..=7` = eras).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub kit_model: u8,
+    /// Cymbal mode bitmask (`bit 0` = Ride on OpenHat, `bit 1` = Crash on Cowbell).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub cymbal_mode: u8,
     /// Per-voice steps and controls.
     #[serde(default)]
     pub voices: VoicesSpec,
@@ -130,6 +154,18 @@ impl VoicesSpec {
 pub struct VoiceSpec {
     /// Step notation (see module docs).
     pub steps: String,
+    /// Optional secondary Bar B step notation for 32-step `A+B` or 64-step `A-D` chaining.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_b: Option<String>,
+    /// Optional Bar C step notation for 64-step `A-D` chaining.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_c: Option<String>,
+    /// Optional Bar D step notation for 64-step `A-D` chaining.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_d: Option<String>,
+    /// Optional custom Fill bar step notation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_fill: Option<String>,
     /// `0..=1`.
     #[serde(default = "default_half")]
     pub tune: f32,
@@ -145,9 +181,21 @@ pub struct VoiceSpec {
     /// `0..=1`.
     #[serde(default = "default_one")]
     pub level: f32,
+    /// Per-voice auxiliary Echo send `0..=1`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub echo_send: f32,
+    /// Per-voice auxiliary Reverb send `0..=1`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub reverb_send: f32,
+    /// Per-voice Acid Filter bus assignment `0..=1`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub filter_send: f32,
     /// Muted tracks keep their steps but play nothing.
     #[serde(default, skip_serializing_if = "is_false")]
     pub mute: bool,
+    /// Soloed tracks silence non-soloed voices on the mixer bus.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub solo: bool,
 }
 
 impl VoiceSpec {
@@ -156,13 +204,27 @@ impl VoiceSpec {
     pub fn new(steps: &str) -> Self {
         Self {
             steps: steps.to_string(),
+            steps_b: None,
+            steps_c: None,
+            steps_d: None,
+            steps_fill: None,
             tune: 0.5,
             decay: 0.5,
             tone: 0.5,
             snappy: 0.5,
             level: 1.0,
+            echo_send: 0.0,
+            reverb_send: 0.0,
+            filter_send: 0.0,
             mute: false,
+            solo: false,
         }
+    }
+
+    /// Per-voice FX sends `[echo, reverb, filter]`.
+    #[must_use]
+    pub fn fx_sends(&self) -> [f32; 3] {
+        [self.echo_send, self.reverb_send, self.filter_send]
     }
 
     /// The DSP controls.
@@ -236,9 +298,24 @@ fn default_tail() -> f32 {
 fn default_block_size() -> usize {
     256
 }
+fn default_last_step() -> u8 {
+    sequencer::STEP_COUNT as u8
+}
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn is_false(b: &bool) -> bool {
     !*b
+}
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero_f32(v: &f32) -> bool {
+    *v == 0.0
+}
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
+}
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_default_last_step(v: &u8) -> bool {
+    *v == sequencer::STEP_COUNT as u8
 }
 
 /// Errors from loading a pattern file.
@@ -287,15 +364,77 @@ impl PatternSpec {
         pattern.shuffle = self.shuffle;
         pattern.accent = self.accent;
         pattern.flam = self.flam;
+        pattern.humanize = self.humanize;
+        pattern.last_step = self.last_step.clamp(1, sequencer::STEP_COUNT as u8);
+        pattern.variation = match self.variation {
+            1 => VariationMode::B,
+            2 => VariationMode::AB,
+            3 => VariationMode::C,
+            4 => VariationMode::D,
+            5 => VariationMode::ABCD,
+            _ => VariationMode::A,
+        };
+        pattern.fill_active = self.fill;
+        pattern.auto_fill_bars = self.auto_fill_bars;
         for voice in VoiceId::ALL {
             if let Some(v) = self.voices.get(voice) {
                 let mut track =
                     Track::parse(&v.steps).map_err(|e| SpecError::Steps(voice.name(), e))?;
                 track.mute = v.mute;
                 *pattern.track_mut(voice) = track;
+                if let Some(sb) = v.steps_b.as_deref() {
+                    let mut tb = Track::parse(sb).map_err(|e| SpecError::Steps(voice.name(), e))?;
+                    tb.mute = v.mute;
+                    pattern.tracks_b[voice.index()] = tb;
+                    pattern.has_b = true;
+                } else {
+                    pattern.tracks_b[voice.index()] = track;
+                }
+                if let Some(sc) = v.steps_c.as_deref() {
+                    let mut tc = Track::parse(sc).map_err(|e| SpecError::Steps(voice.name(), e))?;
+                    tc.mute = v.mute;
+                    pattern.tracks_c[voice.index()] = tc;
+                    pattern.has_c = true;
+                } else {
+                    pattern.tracks_c[voice.index()] = track;
+                }
+                if let Some(sd) = v.steps_d.as_deref() {
+                    let mut td = Track::parse(sd).map_err(|e| SpecError::Steps(voice.name(), e))?;
+                    td.mute = v.mute;
+                    pattern.tracks_d[voice.index()] = td;
+                    pattern.has_d = true;
+                } else {
+                    pattern.tracks_d[voice.index()] = pattern.tracks_b[voice.index()];
+                }
+                if let Some(sf) = v.steps_fill.as_deref() {
+                    let mut tf = Track::parse(sf).map_err(|e| SpecError::Steps(voice.name(), e))?;
+                    tf.mute = v.mute;
+                    pattern.tracks_fill[voice.index()] = tf;
+                    pattern.has_fill = true;
+                } else {
+                    pattern.tracks_fill[voice.index()] = track;
+                }
             }
         }
         Ok(pattern)
+    }
+
+    /// Solo bitmask encoded by per-voice `solo` flags.
+    #[must_use]
+    pub fn solo_mask(&self) -> u16 {
+        let mut mask = 0u16;
+        for voice in VoiceId::ALL {
+            if self.voices.get(voice).is_some_and(|v| v.solo) {
+                mask |= 1u16 << voice.index();
+            }
+        }
+        mask
+    }
+
+    /// Per-voice FX sends `[echo, reverb, filter]` (zeros when absent).
+    #[must_use]
+    pub fn voice_fx_sends(&self, voice: VoiceId) -> [f32; 3] {
+        self.voices.get(voice).map_or([0.0; 3], VoiceSpec::fx_sends)
     }
 
     /// Controls for a voice (defaults when the voice is absent).
@@ -400,5 +539,35 @@ mod tests {
         assert_eq!(audio.len(), spec.render_frames());
         assert!(audio.iter().any(|&s| s != 0.0));
         assert!(audio.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn four_bar_abcd_chain_round_trips_and_renders() {
+        let json = r#"{
+            "bpm": 124,
+            "variation": 5,
+            "voices": {
+                "kick": {
+                    "steps":   "X---x---X---x---",
+                    "steps_b": "X---x---X---x-x-",
+                    "steps_c": "X---x---X---X---",
+                    "steps_d": "X---x-x-X-x-X-X-"
+                }
+            },
+            "render": { "bars": 4 }
+        }"#;
+        let spec = PatternSpec::from_json(json).unwrap();
+        let pattern = spec.pattern().unwrap();
+        assert_eq!(pattern.variation, VariationMode::ABCD);
+        assert!(pattern.has_b && pattern.has_c && pattern.has_d);
+        assert_eq!(
+            pattern.tracks_d[VoiceId::Kick.index()].steps[14],
+            sequencer::Step::ACCENT
+        );
+        let again = PatternSpec::from_json(&spec.to_json()).unwrap();
+        assert_eq!(spec, again);
+        let audio = spec.render().unwrap();
+        assert_eq!(audio.len(), spec.render_frames());
+        assert!(audio.iter().any(|&s| s != 0.0));
     }
 }

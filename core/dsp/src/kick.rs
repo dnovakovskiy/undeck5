@@ -98,6 +98,10 @@ fn flush(x: f32) -> f32 {
 pub struct Kick {
     sample_rate: f32,
     params: KickParams,
+    /// Attack / click punch (`0..=1`, `0.5` = classic calibrated balance).
+    tone: f32,
+    /// Multi-era kit model (`0` = classic reference).
+    model: u8,
 
     // Derived per trigger.
     base_freq_hz: f32,
@@ -105,9 +109,12 @@ pub struct Kick {
     velocity: f32,
     drive: f32,
     drive_norm: f32,
+    sweep_depth: f32,
+    click_gain: f32,
 
     // Derived per sample rate.
     sweep_coef: f32,
+    fast_sweep_coef: f32,
     click_coef: f32,
     click_hp_coef: f32,
     click_lp_coef: f32,
@@ -118,6 +125,7 @@ pub struct Kick {
     phase: f32,
     amp_env: f32,
     pitch_env: f32,
+    fast_pitch_env: f32,
     click_env: f32,
     hp_x1: f32,
     hp_y1: f32,
@@ -143,12 +151,17 @@ impl Kick {
         let mut kick = Self {
             sample_rate,
             params: KickParams::default(),
+            tone: 0.5,
+            model: 0,
             base_freq_hz: 0.0,
             amp_coef: 0.0,
             velocity: 0.0,
             drive: 1.0,
             drive_norm: 1.0,
+            sweep_depth: SWEEP_DEPTH,
+            click_gain: CLICK_GAIN,
             sweep_coef: 0.0,
+            fast_sweep_coef: 0.0,
             click_coef: 0.0,
             click_hp_coef: 0.0,
             click_lp_coef: 0.0,
@@ -157,6 +170,7 @@ impl Kick {
             phase: 0.0,
             amp_env: 0.0,
             pitch_env: 0.0,
+            fast_pitch_env: 0.0,
             click_env: 0.0,
             hp_x1: 0.0,
             hp_y1: 0.0,
@@ -165,6 +179,22 @@ impl Kick {
         };
         kick.set_sample_rate(sample_rate);
         kick
+    }
+
+    /// Attack / click punch control (`0..=1`, `0.5` = neutral).
+    #[must_use]
+    pub fn tone(&self) -> f32 {
+        self.tone
+    }
+
+    /// Sets the transient attack / click punch (`0..=1`).
+    pub fn set_tone(&mut self, tone: f32) {
+        self.tone = unit(tone);
+    }
+
+    /// Sets the era voice model (`0` = classic reference).
+    pub fn set_model(&mut self, model: u8) {
+        self.model = model;
     }
 
     /// Current parameters.
@@ -219,6 +249,7 @@ impl Kick {
         self.phase = 0.0;
         self.amp_env = 0.0;
         self.pitch_env = 0.0;
+        self.fast_pitch_env = 0.0;
         self.click_env = 0.0;
         self.hp_x1 = 0.0;
         self.hp_y1 = 0.0;
@@ -230,6 +261,7 @@ impl Voice for Kick {
     fn set_sample_rate(&mut self, sample_rate: f32) {
         self.sample_rate = sample_rate.max(1.0);
         self.sweep_coef = math::tau_coefficient(SWEEP_TAU_S, self.sample_rate);
+        self.fast_sweep_coef = math::tau_coefficient(0.0045, self.sample_rate);
         self.click_coef = math::tau_coefficient(CLICK_TAU_S, self.sample_rate);
         self.click_hp_coef = math::onepole_coefficient(CLICK_HP_HZ, self.sample_rate);
         self.click_lp_coef = math::onepole_coefficient(CLICK_LP_HZ, self.sample_rate);
@@ -241,6 +273,7 @@ impl Voice for Kick {
     fn apply_params(&mut self, params: &VoiceParams) {
         self.set_tune(params.tune);
         self.set_decay(params.decay);
+        self.set_tone(params.tone);
         self.set_level(params.level);
     }
 
@@ -254,16 +287,52 @@ impl Voice for Kick {
             self.level_now = self.params.level;
         }
         self.velocity = velocity;
-        self.base_freq_hz = self.tuned_frequency_hz();
-        self.amp_coef = math::decay_coefficient(self.decay_seconds(), self.sample_rate);
-        self.drive = DRIVE_BASE + DRIVE_VELOCITY * velocity;
-        self.drive_norm = 1.0 / math::soft_clip(self.drive);
+        let classic_exact = self.model == 0 && self.tone == 0.5;
+        if classic_exact {
+            self.base_freq_hz = self.tuned_frequency_hz();
+            self.amp_coef = math::decay_coefficient(self.decay_seconds(), self.sample_rate);
+            self.drive = DRIVE_BASE + DRIVE_VELOCITY * velocity;
+            self.drive_norm = 1.0 / math::soft_clip(self.drive);
+            self.sweep_depth = SWEEP_DEPTH;
+            self.click_gain = CLICK_GAIN;
+        } else {
+            let (freq_mul, decay_mul, sweep, click_mul, extra_drive) = match self.model {
+                // SubBoom 8O8: deep bridged-T sub, gentle transient click, long boom.
+                1 => (0.84, 1.45, 1.15, 0.45, 0.05),
+                // ClubPunch 9O9: punchy two-stage pitch snap + strong beater attack.
+                2 => (0.96, 0.82, 2.35, 1.65, 0.55),
+                // Studio 7O7: tight mid-forward PCM studio punch.
+                3 => (1.08, 0.65, 1.95, 1.55, 0.35),
+                // Silver 6O6: compact fast transistor punch.
+                4 => (1.14, 0.58, 1.75, 1.25, 0.25),
+                // Warehouse Raw: hard driven techno punch.
+                5 => (0.92, 0.92, 2.60, 1.85, 0.95),
+                // LatinPerc: warm low membrane tumba pulse.
+                6 => (1.22, 0.72, 0.85, 0.55, 0.10),
+                // VintageCompu: soft lounge rhythm box pulse.
+                7 => (1.02, 0.75, 0.75, 0.35, 0.0),
+                _ => (1.0, 1.0, SWEEP_DEPTH, 1.0, 0.0),
+            };
+            let attack_scale = 0.2 + 1.6 * self.tone;
+            self.base_freq_hz = self.tuned_frequency_hz() * freq_mul;
+            self.amp_coef =
+                math::decay_coefficient(self.decay_seconds() * decay_mul, self.sample_rate);
+            self.drive = DRIVE_BASE + DRIVE_VELOCITY * velocity + extra_drive * (0.4 + self.tone);
+            self.drive_norm = 1.0 / math::soft_clip(self.drive);
+            self.sweep_depth = sweep * (0.75 + 0.5 * self.tone);
+            self.click_gain = CLICK_GAIN * click_mul * attack_scale;
+        }
 
         // Hard retrigger: the analogue circuit restarts from the pulse edge.
         self.reset_state();
         self.active = true;
         self.amp_env = 1.0;
         self.pitch_env = velocity;
+        self.fast_pitch_env = if matches!(self.model, 2 | 3 | 5) {
+            velocity * (0.5 + self.tone)
+        } else {
+            0.0
+        };
         self.click_env = velocity;
     }
 
@@ -273,33 +342,69 @@ impl Voice for Kick {
             return 0.0;
         }
 
-        // Body: sine with exponentially settling pitch and exponential decay.
-        let freq = self.base_freq_hz * (1.0 + SWEEP_DEPTH * self.pitch_env);
-        self.phase += freq / self.sample_rate;
+        if self.model == 0 && self.tone == 0.5 {
+            // Exact reference path for bit-identical golden renders.
+            let freq = self.base_freq_hz * (1.0 + SWEEP_DEPTH * self.pitch_env);
+            self.phase += freq / self.sample_rate;
+            if self.phase >= 1.0 {
+                self.phase -= 1.0;
+            }
+            let body = math::sin_turns(self.phase) * self.amp_env;
+
+            let hp = self.click_hp_coef * (self.hp_y1 + self.click_env - self.hp_x1);
+            self.hp_x1 = self.click_env;
+            self.hp_y1 = flush(hp);
+            self.lp_y1 = flush(self.lp_y1 + (1.0 - self.click_lp_coef) * (hp - self.lp_y1));
+            let click = self.lp_y1 * CLICK_GAIN;
+
+            let shaped = math::soft_clip((body + click) * self.drive) * self.drive_norm;
+
+            self.amp_env *= self.amp_coef;
+            self.pitch_env = flush(self.pitch_env * self.sweep_coef);
+            self.click_env = flush(self.click_env * self.click_coef);
+            if self.amp_env < IDLE_THRESHOLD && self.click_env < IDLE_THRESHOLD {
+                self.reset_state();
+            }
+
+            self.level_now += (self.params.level - self.level_now) * self.level_coef;
+            if (self.params.level - self.level_now).abs() < LEVEL_SNAP {
+                self.level_now = self.params.level;
+            }
+
+            return shaped * self.velocity * self.level_now * CALIBRATION;
+        }
+
+        // Extended multi-era / variable-attack path.
+        let freq = self.base_freq_hz
+            * (1.0 + self.sweep_depth * self.pitch_env + 2.4 * self.fast_pitch_env);
+        self.phase += (freq / self.sample_rate).min(0.48);
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }
-        let body = math::sin_turns(self.phase) * self.amp_env;
+        let fundamental = math::sin_turns(self.phase);
+        let harmonic = if matches!(self.model, 2 | 5) {
+            0.18 * self.tone * math::sin_turns(2.0 * self.phase)
+        } else {
+            0.0
+        };
+        let body = (fundamental + harmonic) * self.amp_env;
 
-        // Click: pulse → one-pole high-pass → one-pole low-pass.
         let hp = self.click_hp_coef * (self.hp_y1 + self.click_env - self.hp_x1);
         self.hp_x1 = self.click_env;
         self.hp_y1 = flush(hp);
         self.lp_y1 = flush(self.lp_y1 + (1.0 - self.click_lp_coef) * (hp - self.lp_y1));
-        let click = self.lp_y1 * CLICK_GAIN;
+        let click = self.lp_y1 * self.click_gain;
 
-        // Saturate the mix; normalise so a full-scale body still peaks at 1.
         let shaped = math::soft_clip((body + click) * self.drive) * self.drive_norm;
 
-        // Advance envelopes.
         self.amp_env *= self.amp_coef;
         self.pitch_env = flush(self.pitch_env * self.sweep_coef);
+        self.fast_pitch_env = flush(self.fast_pitch_env * self.fast_sweep_coef);
         self.click_env = flush(self.click_env * self.click_coef);
         if self.amp_env < IDLE_THRESHOLD && self.click_env < IDLE_THRESHOLD {
             self.reset_state();
         }
 
-        // Level: follows the control within a few milliseconds.
         self.level_now += (self.params.level - self.level_now) * self.level_coef;
         if (self.params.level - self.level_now).abs() < LEVEL_SNAP {
             self.level_now = self.params.level;

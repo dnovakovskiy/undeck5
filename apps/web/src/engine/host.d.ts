@@ -11,6 +11,8 @@ export interface CoreApi {
   p5_engine_free(engine: number): void;
   p5_engine_load_pattern_json(engine: number, json: number): number;
   p5_engine_start(engine: number): void;
+  p5_engine_start_quantized?(engine: number, quantum: number): void;
+  p5_engine_is_armed?(engine: number): number;
   p5_engine_stop(engine: number): void;
   p5_engine_set_stop_after_u32(engine: number, steps: number): void;
   p5_engine_position_f64(engine: number): number;
@@ -18,6 +20,7 @@ export interface CoreApi {
   p5_engine_tempo(engine: number): number;
   p5_engine_beat(engine: number): number;
   p5_engine_clock_locked(engine: number): number;
+  p5_engine_phase_error_ms?(engine: number): number;
   p5_engine_set_clock_mode(engine: number, mode: number): number;
   p5_engine_observe(engine: number, sample: number, kind: number, phase: number, bpm: number): number;
   p5_engine_midi(engine: number, message: number, sample: number): number;
@@ -25,13 +28,23 @@ export interface CoreApi {
   p5_engine_resync(engine: number): void;
   p5_engine_set_nudge_ms(engine: number, ms: number): void;
   p5_engine_set_latency_ms(engine: number, ms: number): void;
+  p5_engine_trigger_voice?(engine: number, voice: number, velocity: number): void;
   p5_engine_render(engine: number, out: number, frames: number): void;
+  p5_engine_render_buses?(
+    engine: number,
+    dry: number,
+    echo: number,
+    reverb: number,
+    filter: number,
+    frames: number,
+  ): void;
 }
 
 /** Main thread → host. */
 export type HostMessage =
   | { type: "pattern"; bytes: Uint8Array }
   | { type: "start" }
+  | { type: "start-quantized"; quantum: number }
   | { type: "stop" }
   | { type: "clock-mode"; mode: number }
   | { type: "observe"; sample: number; kind: number; phase: number; bpm: number }
@@ -40,6 +53,22 @@ export type HostMessage =
   | { type: "resync" }
   | { type: "nudge"; ms: number }
   | { type: "latency"; ms: number }
+  | { type: "trigger-voice"; voiceIdx: number; velocity: number }
+  | {
+      type: "trigger-pad";
+      id: number;
+      voiceIdx: number;
+      pitch: number;
+      velocity: number;
+      quantize: boolean;
+      overdub: boolean;
+      heardBeat?: number;
+    }
+  | { type: "grid-meta"; shuffle: number; lastStep: number }
+  | { type: "rmx-state"; state: Record<string, unknown> }
+  | { type: "vfx-level"; level: number }
+  | { type: "ext-gain"; gain: number }
+  | { type: "sync-click" }
   | { type: "dispose" };
 
 /** Host → main thread. */
@@ -60,10 +89,14 @@ export type HostEvent =
       tempo: number;
       beat: number;
       locked: boolean;
+      armed: boolean;
+      phaseErrorMs: number;
       position: number;
       /** Context frame minus engine position (as in "offset"). */
       offset: number;
     }
+  | { type: "pad-triggered"; id: number; stepIdx: number }
+  | { type: "overdub"; voiceIdx: number; stepIdx: number; accent: boolean; pitch: number }
   /** `fatal: false`: the engine keeps running (e.g. a rejected pattern). */
   | { type: "error"; message: string; fatal?: boolean };
 
@@ -72,4 +105,10 @@ export declare class EngineHost {
   readonly alive: boolean;
   onMessage(msg: HostMessage): void;
   process(frames: number, contextFrame: number): Float32Array;
+  processStereo(
+    frames: number,
+    contextFrame: number,
+    inL?: Float32Array | null,
+    inR?: Float32Array | null,
+  ): [Float32Array, Float32Array];
 }

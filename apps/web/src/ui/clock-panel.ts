@@ -7,7 +7,12 @@
 import { BridgeClient, DEFAULT_BRIDGE_URL, discoverBridgeUrl, PRECISION_MODE } from "../clock/bridge";
 import type { BridgeDevice, BridgeTimeline } from "../clock/bridge";
 import { MidiClockInput, type MidiPort } from "../clock/midi";
-import type { AudioEngine, AudioState, EngineStatus } from "../engine/audio-engine";
+import {
+  sinkSelectionSupported,
+  type AudioEngine,
+  type AudioState,
+  type EngineStatus,
+} from "../engine/audio-engine";
 import { loadNumber, loadString, saveString } from "../storage";
 
 export type SourceKind = "internal" | "tap" | "link" | "bridge" | "midi";
@@ -18,9 +23,13 @@ export interface ClockPanelHost {
   tap(ms: number): void;
   /** Called after the source changed. */
   onSourceChange(source: SourceKind, previous: SourceKind): void;
-  /** Current pattern BPM (used to seed a standalone Ableton Link session). */
+  /** Current pattern BPM (used to seed or push to an Ableton Link session). */
   getPatternBpm?(): number;
+  /** Called when Ableton Link Start/Stop Sync starts or stops transport remotely. */
+  onExternalTransport?(playing: boolean): void;
 }
+
+const monoEpochMs = (): number => performance.timeOrigin + performance.now();
 
 export interface ClockPanelOptions {
   bridge: boolean;
@@ -37,6 +46,7 @@ export class ClockPanel {
   private bridgeUrl: string;
   private bridgeUrlFromUser: boolean;
   private discovered = false;
+  private bridgeDiscovered = false;
   private timeline: BridgeTimeline | null = null;
   private bridgeState = "closed";
   private bridgeStatus = "";
@@ -52,25 +62,32 @@ export class ClockPanel {
   private linkTimer: ReturnType<typeof setInterval> | null = null;
   private linkPeerId = Math.random().toString(36).slice(2, 10);
   private linkPeers = new Map<string, number>();
-  private linkAnchorEpochMs = Date.now();
+  private linkAnchorEpochMs = monoEpochMs();
   private linkAnchorBeat = 0;
   private linkBpm = 124;
+  private linkStartStopSync = false;
 
   private readonly el: {
     root: HTMLElement;
     tempo: HTMLOutputElement;
     lock: HTMLOutputElement;
+    drift: HTMLOutputElement | null;
     beat: HTMLOutputElement;
     beats: HTMLElement[];
     status: HTMLElement;
     statusDetail: HTMLElement;
     nudge: HTMLOutputElement;
     latency: HTMLInputElement;
+    quantLaunch: HTMLInputElement | null;
+    syncClick: HTMLButtonElement | null;
+    audioSinkWrap: HTMLElement | null;
+    audioSink: HTMLSelectElement | null;
     bridgeUrl: HTMLInputElement;
     bridgeFollow: HTMLSelectElement;
     devices: HTMLUListElement;
     linkUrl: HTMLInputElement | null;
     linkPeersOut: HTMLElement | null;
+    linkStartStop: HTMLInputElement | null;
     midiInput: HTMLSelectElement;
   };
 
@@ -83,17 +100,23 @@ export class ClockPanel {
       root,
       tempo: $(root, "#clock-tempo"),
       lock: $(root, "#clock-lock"),
+      drift: root.querySelector<HTMLOutputElement>("#clock-drift"),
       beat: $(root, "#clock-beat"),
       beats: [...root.querySelectorAll<HTMLElement>(".beats i")],
       status: $(root, "#source-status"),
       statusDetail: $(root, "#source-detail"),
       nudge: $(root, "#nudge-out"),
       latency: $(root, "#latency"),
+      quantLaunch: root.querySelector<HTMLInputElement>("#quant-launch"),
+      syncClick: root.querySelector<HTMLButtonElement>("#sync-click"),
+      audioSinkWrap: root.querySelector<HTMLElement>("#audio-sink-wrap"),
+      audioSink: root.querySelector<HTMLSelectElement>("#audio-sink"),
       bridgeUrl: $(root, "#bridge-url"),
       bridgeFollow: $(root, "#bridge-follow"),
       devices: $(root, "#bridge-devices"),
       linkUrl: root.querySelector<HTMLInputElement>("#link-url"),
       linkPeersOut: root.querySelector<HTMLElement>("#link-peers"),
+      linkStartStop: root.querySelector<HTMLInputElement>("#link-start-stop"),
       midiInput: $(root, "#midi-input"),
     };
 
@@ -122,6 +145,65 @@ export class ClockPanel {
       host.audio.setLatencyMs(this.latencyMs);
     });
     $(root, "#resync").addEventListener("click", () => host.audio.resync());
+
+    // Quantized Bar-1 Launch, Sync Calibration Click & Audio Output selector.
+    if (this.el.quantLaunch) {
+      const qSaved = loadString("quant-launch") === "true";
+      this.el.quantLaunch.checked = qSaved;
+      host.audio.setQuantizedLaunch(qSaved);
+      this.el.quantLaunch.addEventListener("change", () => {
+        const on = this.el.quantLaunch!.checked;
+        saveString("quant-launch", String(on));
+        host.audio.setQuantizedLaunch(on);
+      });
+    }
+    this.el.syncClick?.addEventListener("click", () => {
+      void host.audio.triggerSyncClick().catch(() => {});
+    });
+    if (this.el.audioSinkWrap && this.el.audioSink && sinkSelectionSupported()) {
+      this.el.audioSinkWrap.hidden = false;
+      const refreshSinks = async () => {
+        const outs = await host.audio.listAudioOutputs();
+        if (!outs.length || !this.el.audioSink) return;
+        const cur = this.el.audioSink.value;
+        this.el.audioSink.replaceChildren(
+          new Option("System Default", ""),
+          ...outs.filter((o) => o.deviceId !== "default").map((o) => new Option(o.label, o.deviceId)),
+        );
+        if ([...this.el.audioSink.options].some((o) => o.value === cur)) {
+          this.el.audioSink.value = cur;
+        }
+      };
+      this.el.audioSink.addEventListener("pointerdown", () => void refreshSinks());
+      this.el.audioSink.addEventListener("focus", () => void refreshSinks());
+      this.el.audioSink.addEventListener("change", () => {
+        void host.audio.setAudioOutputDevice(this.el.audioSink!.value);
+      });
+      navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshSinks());
+    }
+
+    // Ableton Link Start/Stop Sync & Bidirectional Tempo push controls.
+    this.linkStartStopSync = loadString("link-start-stop") === "true";
+    if (this.el.linkStartStop) {
+      this.el.linkStartStop.checked = this.linkStartStopSync;
+      this.el.linkStartStop.addEventListener("change", () => {
+        this.linkStartStopSync = this.el.linkStartStop!.checked;
+        saveString("link-start-stop", String(this.linkStartStopSync));
+        this.bridge?.setLinkStartStop(this.linkStartStopSync);
+      });
+    }
+    root.querySelector<HTMLButtonElement>("#link-bpm-down")?.addEventListener("click", (e) => {
+      const base = this.activeLinkBpm();
+      this.pushLinkTempo(e.shiftKey ? base - 0.1 : Math.round(base) - 1);
+    });
+    root.querySelector<HTMLButtonElement>("#link-bpm-up")?.addEventListener("click", (e) => {
+      const base = this.activeLinkBpm();
+      this.pushLinkTempo(e.shiftKey ? base + 0.1 : Math.round(base) + 1);
+    });
+    root.querySelector<HTMLButtonElement>("#link-push-bpm")?.addEventListener("click", () => {
+      const pat = this.host.getPatternBpm?.() ?? 124;
+      this.pushLinkTempo(pat);
+    });
 
     // Tap pad: pointerdown carries the most accurate timestamp; keyboard
     // activation (click with detail 0) uses "now".
@@ -216,19 +298,62 @@ export class ClockPanel {
     this.render(this.host.audio.lastStatus);
   }
 
+  adjustNudge(deltaMs: number): void {
+    this.setNudge(this.nudgeMs + deltaMs);
+  }
+
   private setNudge(ms: number): void {
-    this.nudgeMs = Math.max(-500, Math.min(500, Math.round(ms)));
+    const rounded = Math.round(ms * 2) / 2;
+    this.nudgeMs = Math.max(-500, Math.min(500, Object.is(rounded, -0) ? 0 : rounded));
     this.el.nudge.textContent = `${this.nudgeMs > 0 ? "+" : this.nudgeMs < 0 ? "−" : ""}${Math.abs(this.nudgeMs)} ms`;
     this.host.audio.setNudgeMs(this.nudgeMs);
   }
 
   // ---- Ableton Link local fallback mesh + LAN Bridge -----------------
 
+  private activeLinkBpm(): number {
+    if (this.bridgeState === "open" && this.timeline && this.timeline.bpm > 0) {
+      return this.timeline.bpm;
+    }
+    return this.linkBpm;
+  }
+
+  /** Pushes a tempo change bidirectionally into the Ableton Link session. */
+  pushLinkTempo(rawBpm: number): void {
+    const bpm = Math.max(20, Math.min(400, Math.round(rawBpm * 100) / 100));
+    const now = monoEpochMs();
+    const elapsedSec = (now - this.linkAnchorEpochMs) / 1000;
+    this.linkAnchorBeat = this.linkAnchorBeat + elapsedSec * (this.linkBpm / 60);
+    this.linkAnchorEpochMs = now;
+    this.linkBpm = bpm;
+    this.linkChannel?.postMessage({
+      peer: this.linkPeerId,
+      bpm: this.linkBpm,
+      anchorEpochMs: this.linkAnchorEpochMs,
+      anchorBeat: this.linkAnchorBeat,
+    });
+    this.bridge?.setLinkTempo(bpm);
+    this.renderStatus();
+  }
+
+  /** Publishes local Play/Stop state to Ableton Link peers when Start/Stop Sync is enabled. */
+  notifyTransport(playing: boolean): void {
+    if (this.source !== "link" || !this.linkStartStopSync) return;
+    this.linkChannel?.postMessage({
+      peer: this.linkPeerId,
+      bpm: this.linkBpm,
+      anchorEpochMs: this.linkAnchorEpochMs,
+      anchorBeat: this.linkAnchorBeat,
+      transport: playing,
+    });
+    this.bridge?.setLinkPlay(playing);
+  }
+
   private startLocalLinkMesh(): void {
     this.stopLocalLinkMesh();
     const patBpm = this.host.getPatternBpm?.() ?? 124;
     this.linkBpm = Number.isFinite(patBpm) && patBpm >= 20 && patBpm <= 400 ? patBpm : 124;
-    this.linkAnchorEpochMs = Date.now();
+    this.linkAnchorEpochMs = monoEpochMs();
     this.linkAnchorBeat = 0;
 
     if (typeof BroadcastChannel === "function") {
@@ -240,6 +365,7 @@ export class ClockPanel {
             bpm?: number;
             anchorEpochMs?: number;
             anchorBeat?: number;
+            transport?: boolean;
             bye?: boolean;
           };
           if (!d || typeof d.peer !== "string" || d.peer === this.linkPeerId) return;
@@ -248,7 +374,7 @@ export class ClockPanel {
             this.renderStatus();
             return;
           }
-          this.linkPeers.set(d.peer, Date.now());
+          this.linkPeers.set(d.peer, monoEpochMs());
           if (
             typeof d.bpm === "number" &&
             typeof d.anchorEpochMs === "number" &&
@@ -257,6 +383,9 @@ export class ClockPanel {
             this.linkBpm = d.bpm;
             this.linkAnchorEpochMs = d.anchorEpochMs;
             this.linkAnchorBeat = d.anchorBeat;
+          }
+          if (typeof d.transport === "boolean" && this.linkStartStopSync) {
+            this.host.onExternalTransport?.(d.transport);
           }
           this.renderStatus();
         };
@@ -268,7 +397,7 @@ export class ClockPanel {
 
     this.linkTimer = setInterval(() => {
       if (this.source !== "link") return;
-      const nowEpoch = Date.now();
+      const nowEpoch = monoEpochMs();
       for (const [peer, seenAt] of this.linkPeers) {
         if (nowEpoch - seenAt > 3000) this.linkPeers.delete(peer);
       }
@@ -290,7 +419,7 @@ export class ClockPanel {
         const barPhase = ((beat % 4) + 4) % 4;
         this.host.audio.observe(performance.now(), 0, barPhase, this.linkBpm);
       }
-    }, 50);
+    }, 40);
   }
 
   private stopLocalLinkMesh(): void {
@@ -327,9 +456,20 @@ export class ClockPanel {
           this.bridgeUrl = url;
           this.el.bridgeUrl.value = url;
           if (this.el.linkUrl) this.el.linkUrl.value = url;
+          this.bridgeDiscovered = true;
         }
-        if ((this.source === "bridge" || this.source === "link") && !this.bridge) this.startBridge();
+        if ((this.source === "bridge" || (this.source === "link" && this.bridgeDiscovered)) && !this.bridge) {
+          this.startBridge();
+        } else if (this.source === "link" && !this.bridge) {
+          this.bridgeState = "closed";
+          this.renderStatus();
+        }
       });
+      return;
+    }
+    if (this.source === "link" && !this.bridgeUrlFromUser && !this.bridgeDiscovered) {
+      this.bridgeState = "closed";
+      this.renderStatus();
       return;
     }
     const client = new BridgeClient(this.bridgeUrl, {
@@ -352,6 +492,11 @@ export class ClockPanel {
         this.renderStatus();
       },
       onDeviceChange: () => this.host.audio.resync(),
+      onTransport: (playing) => {
+        if (this.source === "link" && this.linkStartStopSync) {
+          this.host.onExternalTransport?.(playing);
+        }
+      },
       onDevices: (devices) => this.renderDevices(devices),
       onStatus: (level, message) => {
         this.bridgeStatus = `${level}: ${message}`;
@@ -362,11 +507,12 @@ export class ClockPanel {
       },
     });
     this.bridge = client;
-    // Tell the bridge whether we want Ableton Link ("link") or Pioneer Pro DJ Link ("prolink")
+    // Tell the bridge whether we want Ableton Link ("link") or booth clock ("prolink" / "opus" / "sim")
     if (this.source === "link") {
       client.setSource("link");
+      if (this.linkStartStopSync) client.setLinkStartStop(true);
     } else if (this.source === "bridge") {
-      client.setSource("prolink");
+      client.setSource("booth");
     }
     if (this.followTarget !== "master") client.follow(this.followTarget);
     client.connect();
@@ -479,7 +625,27 @@ export class ClockPanel {
     this.el.root.dataset.beat = running ? beat.toFixed(4) : "";
     this.el.root.dataset.beatAt = running ? performance.now().toFixed(2) : "";
     this.el.lock.textContent =
-      lock === "off" ? "audio off" : lock === "internal" ? "internal" : lock === "locked" ? "locked" : "searching";
+      running && status.armed
+        ? "armed · bar 1"
+        : lock === "off"
+          ? "audio off"
+          : lock === "internal"
+            ? "internal"
+            : lock === "locked"
+              ? "locked"
+              : "searching";
+    if (this.el.drift) {
+      if (running && following && status.locked) {
+        const err = status.phaseErrorMs;
+        const abs = Math.abs(err);
+        const sign = abs < 0.05 ? "±" : err > 0 ? "+" : "−";
+        this.el.drift.textContent = `${sign}${abs.toFixed(1)} ms`;
+        this.el.drift.dataset.driftState = abs <= 2.0 ? "tight" : abs <= 8.0 ? "warn" : "bad";
+      } else {
+        this.el.drift.textContent = running && !following ? "0.0 ms" : "—";
+        delete this.el.drift.dataset.driftState;
+      }
+    }
     let pos = -1;
     if (running && Number.isFinite(beat)) pos = Math.floor((((beat % 4) + 4) % 4) + 1e-9);
     this.el.beat.textContent = pos >= 0 ? String(pos + 1) : "–";

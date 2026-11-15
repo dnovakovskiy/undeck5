@@ -1086,7 +1086,7 @@ fn loopback_unit_is_found_followed_and_switched() {
                     other => panic!("observation from {other:?}"),
                 }
             }
-            SourceEvent::Status { .. } => {}
+            SourceEvent::Status { .. } | SourceEvent::Transport { .. } => {}
         }
     }
     stop.store(true, Ordering::Relaxed);

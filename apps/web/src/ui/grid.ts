@@ -4,13 +4,23 @@
 // Enter toggles (Space is the global play/stop key).
 
 import type { VoiceFxKind, VoiceFxMap } from "../groove";
-import { describeStep, normalizeSteps, STEP_COUNT, type PatternSpec, type StepChar } from "../spec";
+import {
+  describeStep,
+  STEP_COUNT,
+  stepsForBar,
+  type BarId,
+  type PatternSpec,
+  type StepChar,
+} from "../spec";
 import { VOICES, type VoiceId } from "../voices";
 
 export interface GridHandlers {
   onStep(voice: VoiceId, step: number): void;
+  onPaintStep?(voice: VoiceId, step: number, char: StepChar): void;
+  onAccentStep?(voice: VoiceId, step: number): void;
   onSelect(voice: VoiceId): void;
   onMute(voice: VoiceId): void;
+  onSolo?(voice: VoiceId): void;
   onToggleFx?(voice: VoiceId, fx: VoiceFxKind): void;
 }
 
@@ -36,16 +46,37 @@ export class Grid {
   private readonly steps: HTMLButtonElement[][] = [];
   private readonly rows: HTMLElement[] = [];
   private readonly selectButtons: HTMLButtonElement[] = [];
+  private readonly soloButtons: HTMLButtonElement[] = [];
   private readonly muteButtons: HTMLButtonElement[] = [];
   private readonly fxButtons: Record<VoiceFxKind, HTMLButtonElement>[] = [];
   private focusRow = 0;
   private focusCol = 0;
   private head = -1;
+  private dragPaint: {
+    active: boolean;
+    moved: boolean;
+    targetChar: StepChar;
+    startRow: number;
+    startCol: number;
+    startVoice: VoiceId;
+  } | null = null;
+  private suppressNextClick = false;
 
   constructor(
     private readonly root: HTMLElement,
     private readonly handlers: GridHandlers,
   ) {
+    const endDrag = () => {
+      if (this.dragPaint?.moved) {
+        this.suppressNextClick = true;
+        setTimeout(() => {
+          this.suppressNextClick = false;
+        }, 0);
+      }
+      this.dragPaint = null;
+    };
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
     // Classic TR-8S / TR-8O8 16-step color scale bar (Red / Orange / Yellow / Cream)
     const scaleRow = document.createElement("div");
     scaleRow.className = "tr-scale-row";
@@ -84,6 +115,16 @@ export class Grid {
       sel.setAttribute("aria-label", `${voice.name} controls`);
       sel.addEventListener("click", () => handlers.onSelect(voice.id));
 
+      const solo = document.createElement("button");
+      solo.type = "button";
+      solo.className = "solo";
+      solo.textContent = "S";
+      solo.dataset.solo = voice.id;
+      solo.title = `Solo ${voice.name}`;
+      solo.setAttribute("aria-pressed", "false");
+      solo.setAttribute("aria-label", `Solo ${voice.name}`);
+      solo.addEventListener("click", () => handlers.onSolo?.(voice.id));
+
       const mute = document.createElement("button");
       mute.type = "button";
       mute.className = "mute";
@@ -116,9 +157,10 @@ export class Grid {
         fxWrap.append(fb);
       }
 
-      head.append(sel, mute, fxWrap);
+      head.append(sel, solo, mute, fxWrap);
       row.append(head);
       this.selectButtons.push(sel);
+      this.soloButtons.push(solo);
       this.muteButtons.push(mute);
       this.fxButtons.push(rowFxMap);
 
@@ -132,9 +174,45 @@ export class Grid {
         b.dataset.key = STEP_KEYS[i] ?? "";
         b.tabIndex = r === 0 && i === 0 ? 0 : -1;
         b.setAttribute("aria-label", `${voice.name} step ${i + 1}`);
-        b.addEventListener("click", () => {
+        b.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0 || e.altKey) return;
+          const isOff = b.dataset.state === "off" || !b.dataset.state;
+          this.dragPaint = {
+            active: true,
+            moved: false,
+            targetChar: isOff ? "x" : "-",
+            startRow: r,
+            startCol: i,
+            startVoice: voice.id,
+          };
+        });
+        b.addEventListener("pointerenter", () => {
+          const dp = this.dragPaint;
+          if (!dp || !dp.active) return;
+          if (r === dp.startRow && i === dp.startCol) return;
+          if (!dp.moved) {
+            dp.moved = true;
+            handlers.onPaintStep?.(dp.startVoice, dp.startCol, dp.targetChar);
+          }
           this.setFocus(r, i, false);
-          handlers.onStep(voice.id, i);
+          handlers.onPaintStep?.(voice.id, i, dp.targetChar);
+        });
+        b.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this.setFocus(r, i, false);
+          handlers.onAccentStep?.(voice.id, i);
+        });
+        b.addEventListener("click", (e) => {
+          if (this.suppressNextClick) {
+            this.suppressNextClick = false;
+            return;
+          }
+          this.setFocus(r, i, false);
+          if (e.altKey && handlers.onAccentStep) {
+            handlers.onAccentStep(voice.id, i);
+          } else {
+            handlers.onStep(voice.id, i);
+          }
         });
         b.addEventListener("keydown", (e) => this.onKey(e, r, i));
         buttons.push(b);
@@ -146,14 +224,20 @@ export class Grid {
     });
   }
 
-  render(spec: PatternSpec, selected: VoiceId, voiceFx?: VoiceFxMap): void {
+  render(spec: PatternSpec, selected: VoiceId, voiceFx?: VoiceFxMap, editBank: BarId = "a"): void {
+    const anySolo = VOICES.some((item) => spec.voices[item.id].solo);
+    for (let i = 0; i < STEP_COUNT; i++) {
+      this.scaleCells[i]?.classList.toggle("past-last", i >= spec.last_step);
+    }
     VOICES.forEach((voice, r) => {
       const v = spec.voices[voice.id];
-      const steps = normalizeSteps(v.steps);
+      const steps = stepsForBar(v, editBank);
       const row = this.rows[r]!;
-      row.classList.toggle("muted", v.mute);
+      row.classList.toggle("muted", v.mute || (anySolo && !v.solo));
+      row.classList.toggle("soloed", v.solo);
       row.classList.toggle("selected", voice.id === selected);
       this.selectButtons[r]!.setAttribute("aria-pressed", String(voice.id === selected));
+      this.soloButtons[r]!.setAttribute("aria-pressed", String(v.solo));
       this.muteButtons[r]!.setAttribute("aria-pressed", String(v.mute));
 
       const fxState = voiceFx?.[voice.id];
@@ -178,10 +262,11 @@ export class Grid {
       this.steps[r]!.forEach((b, i) => {
         const c = (steps[i] ?? "-") as StepChar;
         const state = STATE[c];
+        b.classList.toggle("past-last", i >= spec.last_step);
         if (b.dataset.state !== state) {
           b.dataset.state = state;
           b.setAttribute("aria-pressed", String(c !== "-"));
-          b.title = `${voice.name} step ${i + 1} [${STEP_KEYS[i]}]: ${describeStep(c)}`;
+          b.title = `${voice.name} step ${i + 1} [${STEP_KEYS[i]}]: ${describeStep(c)} (drag to paint · right-click for accent)`;
         }
       });
     });

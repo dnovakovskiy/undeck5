@@ -65,7 +65,7 @@ impl Default for Config {
 }
 
 enum HubCommand {
-    Follow(FollowTarget),
+    SourceCmd(SourceCommand),
     SetSource(SourceKind),
 }
 
@@ -235,31 +235,43 @@ fn run_hub(
     let mut last_timeline = Instant::now() - TIMELINE_PERIOD;
     let mut last_locked = false;
     while !stop.load(Ordering::Relaxed) {
+        let first_event = source
+            .as_ref()
+            .and_then(|s| s.recv_timeout(Duration::from_millis(2)));
+        if source.is_none() {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let now = clock::now_us();
+        let mut handle_event = |event| {
+            if let Some(msg) = clock.handle(event, now) {
+                let msg: Arc<str> = msg.into();
+                {
+                    let mut st = hub.state.lock().unwrap_or_else(|p| p.into_inner());
+                    if msg.contains("\"type\":\"devices\"") {
+                        st.devices = Some(Arc::clone(&msg));
+                    } else if msg.contains("\"type\":\"status\"") {
+                        st.status = Some(Arc::clone(&msg));
+                    }
+                }
+                if verbose {
+                    eprintln!("player5-bridge: {msg}");
+                }
+                hub.broadcast(msg);
+            }
+        };
+        if let Some(event) = first_event {
+            handle_event(event);
+        }
         if let Some(src) = source.as_ref() {
             while let Some(event) = src.try_recv() {
-                if let Some(msg) = clock.handle(event, now) {
-                    let msg: Arc<str> = msg.into();
-                    {
-                        let mut st = hub.state.lock().unwrap_or_else(|p| p.into_inner());
-                        if msg.contains("\"type\":\"devices\"") {
-                            st.devices = Some(Arc::clone(&msg));
-                        } else {
-                            st.status = Some(Arc::clone(&msg));
-                        }
-                    }
-                    if verbose {
-                        eprintln!("player5-bridge: {msg}");
-                    }
-                    hub.broadcast(msg);
-                }
+                handle_event(event);
             }
         }
         while let Ok(cmd) = commands.try_recv() {
             match cmd {
-                HubCommand::Follow(target) => {
+                HubCommand::SourceCmd(sc) => {
                     if let Some(src) = source.as_ref() {
-                        src.command(SourceCommand::Follow(target));
+                        src.command(sc);
                     }
                 }
                 HubCommand::SetSource(new_kind) => {
@@ -302,14 +314,14 @@ fn run_hub(
         }
         clock.advance(now);
         let locked = clock.locked();
-        if locked != last_locked || last_timeline.elapsed() >= TIMELINE_PERIOD {
+        let immediate = clock.take_immediate_timeline();
+        if immediate || locked != last_locked || last_timeline.elapsed() >= TIMELINE_PERIOD {
             let msg: Arc<str> = clock.timeline_message(now).into();
             hub.state.lock().unwrap_or_else(|p| p.into_inner()).timeline = Some(Arc::clone(&msg));
             hub.broadcast(msg);
             last_timeline = Instant::now();
             last_locked = locked;
         }
-        std::thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -760,7 +772,27 @@ fn handle_client_message(text: &str, hub: &Hub) -> Option<String> {
                 _ => return None,
             };
             let tx = hub.commands.lock().unwrap_or_else(|p| p.into_inner());
-            let _ = tx.send(HubCommand::Follow(target));
+            let _ = tx.send(HubCommand::SourceCmd(SourceCommand::Follow(target)));
+            None
+        }
+        "link-tempo" => {
+            let bpm = msg.get("bpm")?.as_f64().filter(|b| b.is_finite())?;
+            let tx = hub.commands.lock().unwrap_or_else(|p| p.into_inner());
+            let _ = tx.send(HubCommand::SourceCmd(SourceCommand::SetTempo(bpm)));
+            None
+        }
+        "link-start-stop" => {
+            let enabled = msg.get("enabled")?.as_bool()?;
+            let tx = hub.commands.lock().unwrap_or_else(|p| p.into_inner());
+            let _ = tx.send(HubCommand::SourceCmd(SourceCommand::SetStartStopSync(
+                enabled,
+            )));
+            None
+        }
+        "link-play" => {
+            let playing = msg.get("playing")?.as_bool()?;
+            let tx = hub.commands.lock().unwrap_or_else(|p| p.into_inner());
+            let _ = tx.send(HubCommand::SourceCmd(SourceCommand::SetPlaying(playing)));
             None
         }
         "source" => {

@@ -185,8 +185,13 @@ pub struct Control {
     lookahead: u64,
     timing: Arc<SharedTiming>,
     sent_params: [VoiceParams; VOICE_COUNT],
+    sent_sends: [[f32; 3]; VOICE_COUNT],
     sent_gain: f32,
     sent_limiter: bool,
+    sent_kit_model: u8,
+    sent_cymbal_mode: u8,
+    sent_solo_mask: u16,
+    armed_step: Option<u64>,
     last_now: u64,
     queued: QueuedLog,
     /// Newest render position seen in [`SharedTiming`].
@@ -223,8 +228,13 @@ impl Control {
             lookahead: (DEFAULT_LOOKAHEAD_SAMPLES as f64 * sr / 48_000.0).round() as u64,
             timing,
             sent_params: [VoiceParams::default(); VOICE_COUNT],
+            sent_sends: [[0.0; 3]; VOICE_COUNT],
             sent_gain: 1.0,
             sent_limiter: false,
+            sent_kit_model: 0,
+            sent_cymbal_mode: 0,
+            sent_solo_mask: 0,
+            armed_step: None,
             last_now: 0,
             queued: QueuedLog::new(),
             published: 0,
@@ -374,6 +384,34 @@ impl Control {
         }
     }
 
+    /// Latest follower phase residual in milliseconds (`0.0` when using the
+    /// internal clock or before lock). Positive means the external source was
+    /// slightly ahead of our timeline.
+    #[must_use]
+    pub fn phase_error_ms(&self) -> f64 {
+        match self.mode {
+            ClockMode::Follow(_) if self.follower.is_locked() => {
+                let bpm = self.tempo().max(1.0);
+                self.follower.phase_error() * 60_000.0 / bpm
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// Whether playback is currently armed and waiting for a quantized downbeat
+    /// (`start_quantized`).
+    #[must_use]
+    pub fn is_launch_armed(&self, now: u64) -> bool {
+        if !self.scheduler.is_playing() {
+            return false;
+        }
+        let Some(target_step) = self.armed_step else {
+            return false;
+        };
+        let beat = self.beat_at(now);
+        beat + 1e-4 < (target_step as f64) * sequencer::BEATS_PER_STEP
+    }
+
     /// Starts playback at `now`. Internal clock: beat 0 and step 0 fall on
     /// the commit point ([`Control::commit_point`]: `now` in lockstep, the
     /// first sample the renderer has not committed to when it runs on its
@@ -389,6 +427,7 @@ impl Control {
     /// count ([`Control::set_stop_after`]) counts from the first step of
     /// the new run.
     pub fn start(&mut self, now: u64) {
+        self.armed_step = None;
         let commit = self.commit_point(now);
         match self.mode {
             ClockMode::Internal => {
@@ -414,9 +453,59 @@ impl Control {
         }
     }
 
+    /// Starts playback quantized to the next `quantum_beats` boundary (e.g.
+    /// `4.0` for the next bar downbeat) when following a locked external
+    /// clock; otherwise starts immediately at `now`.
+    pub fn start_quantized(&mut self, now: u64, quantum_beats: f64) {
+        if !matches!(self.mode, ClockMode::Follow(_))
+            || !self.follower.is_locked()
+            || !quantum_beats.is_finite()
+            || quantum_beats <= sequencer::BEATS_PER_STEP
+        {
+            self.start(now);
+            return;
+        }
+        let commit = self.commit_point(now);
+        let cut = self.queued.cut(commit);
+        if cut.dropped.is_some() {
+            self.send_flush(cut.flush);
+        }
+        self.queued.flush_from(cut.flush);
+        let mut from = commit;
+        if let Some(heard) = cut.heard {
+            from = from.max(self.half_step_after(heard.sample as f64));
+        }
+        let active = self.active();
+        let clock = AdjustedClock::new(&active, self.controls);
+        let min_step = self.scheduler.first_step_at_or_after(&clock, from);
+        let min_beat = (min_step as f64) * sequencer::BEATS_PER_STEP;
+        // Snap onto the current boundary if within ~5% of a beat, else wait for the next quantum.
+        let q = quantum_beats.max(1.0);
+        let nearest = (min_beat / q).round() * q;
+        let target_beat = if nearest >= min_beat - 0.05 && nearest >= 0.0 {
+            nearest.max(min_beat)
+        } else {
+            (min_beat / q).ceil().max(0.0) * q
+        };
+        let step = (target_beat / sequencer::BEATS_PER_STEP).round().max(0.0) as u64;
+        let step = step.max(min_step);
+        self.armed_step = (step > min_step).then_some(step);
+        self.scheduler.start_at(step);
+    }
+
     /// Stops scheduling. Queued events still play.
     pub fn stop(&mut self) {
+        self.armed_step = None;
         self.scheduler.stop();
+    }
+
+    /// Queues an immediate one-shot voice trigger at `at` (for live drum pads
+    /// and sample-accurate performance rolls).
+    pub fn trigger_voice_now(&mut self, voice: VoiceId, velocity: f32, at: u64) -> bool {
+        if !velocity.is_finite() || velocity <= 0.0 {
+            return false;
+        }
+        self.push_reserved(Event::trigger(at, voice, velocity.clamp(0.0, 1.0)))
     }
 
     /// Stops automatically after `steps` steps (`None` loops forever),
@@ -685,7 +774,76 @@ impl Control {
     ) -> bool {
         let ok = self.push_reserved(Event::param(at, ParamTarget::Voice(voice, param), value));
         if ok {
-            self.sent_params[voice.index()].set(dsp_param(param), value);
+            match param {
+                VoiceParam::SendEcho => self.sent_sends[voice.index()][0] = value,
+                VoiceParam::SendReverb => self.sent_sends[voice.index()][1] = value,
+                VoiceParam::SendFilter => self.sent_sends[voice.index()][2] = value,
+                other => self.sent_params[voice.index()].set(dsp_param(other), value),
+            }
+        }
+        ok
+    }
+
+    /// Queues per-voice FX sends `[echo, reverb, filter]` that changed.
+    pub fn set_voice_fx_sends(&mut self, voice: VoiceId, sends: [f32; 3], at: u64) -> bool {
+        let mut ok = true;
+        for (bus, vp) in [
+            (0, VoiceParam::SendEcho),
+            (1, VoiceParam::SendReverb),
+            (2, VoiceParam::SendFilter),
+        ] {
+            if self.sent_sends[voice.index()][bus] != sends[bus] {
+                ok &= self.set_voice_param(voice, vp, sends[bus], at);
+            }
+        }
+        ok
+    }
+
+    /// Queues a multi-era kit model change (`0..=7`) if changed.
+    pub fn set_kit_model(&mut self, model: u8, at: u64) -> bool {
+        if model == self.sent_kit_model {
+            return true;
+        }
+        let ok = self.push_reserved(Event::param(
+            at,
+            ParamTarget::Master(MasterParam::KitModel),
+            f32::from(model),
+        ));
+        if ok {
+            self.sent_kit_model = model;
+        }
+        ok
+    }
+
+    /// Queues a cymbal mode bitmask change (`0..=3`) if changed.
+    pub fn set_cymbal_mode(&mut self, mode: u8, at: u64) -> bool {
+        let mode = mode & 0x03;
+        if mode == self.sent_cymbal_mode {
+            return true;
+        }
+        let ok = self.push_reserved(Event::param(
+            at,
+            ParamTarget::Master(MasterParam::CymbalMode),
+            f32::from(mode),
+        ));
+        if ok {
+            self.sent_cymbal_mode = mode;
+        }
+        ok
+    }
+
+    /// Queues a solo bitmask change (`0..1024`) if changed.
+    pub fn set_solo_mask(&mut self, mask: u16, at: u64) -> bool {
+        if mask == self.sent_solo_mask {
+            return true;
+        }
+        let ok = self.push_reserved(Event::param(
+            at,
+            ParamTarget::Master(MasterParam::SoloMask),
+            f32::from(mask),
+        ));
+        if ok {
+            self.sent_solo_mask = mask;
         }
         ok
     }
@@ -839,7 +997,7 @@ fn active_of<'a>(
     }
 }
 
-/// Maps the sequencer's parameter names onto the DSP ones.
+/// Maps the sequencer's core voice parameter names onto the DSP ones.
 #[must_use]
 pub fn dsp_param(param: VoiceParam) -> Param {
     match param {
@@ -847,7 +1005,10 @@ pub fn dsp_param(param: VoiceParam) -> Param {
         VoiceParam::Decay => Param::Decay,
         VoiceParam::Level => Param::Level,
         VoiceParam::Snappy => Param::Snappy,
-        VoiceParam::Tone => Param::Tone,
+        VoiceParam::Tone
+        | VoiceParam::SendEcho
+        | VoiceParam::SendReverb
+        | VoiceParam::SendFilter => Param::Tone,
     }
 }
 

@@ -31,7 +31,7 @@
 //! is ignored. A full-velocity hit at the default controls peaks near
 //! −12 dBFS.
 
-use crate::blocks::{Square, Svf};
+use crate::blocks::{Noise, Square, Svf};
 use crate::math;
 use crate::voice::Voice;
 use crate::VoiceParams;
@@ -87,7 +87,9 @@ const IDLE_THRESHOLD: f32 = 1e-5;
 /// Level below which the fast stage is flushed to exactly zero (−180 dB).
 const FLUSH: f32 = 1e-9;
 
-/// The cowbell voice. See the [module docs](self).
+const CRASH_FREQS_HZ: [f32; 4] = [317.0, 463.0, 629.0, 947.0];
+
+/// The cowbell voice (with optional crash cymbal mode). See the [module docs](self).
 #[derive(Clone, Debug)]
 pub struct Cowbell {
     sample_rate: f32,
@@ -95,6 +97,7 @@ pub struct Cowbell {
     decay: f32,
     tone: f32,
     level: f32,
+    crash_mode: bool,
 
     // Derived per sample rate.
     fast_coef: f32,
@@ -108,6 +111,9 @@ pub struct Cowbell {
     active: bool,
     low_osc: Square,
     high_osc: Square,
+    crash_oscs: [Square; 4],
+    crash_noise: Noise,
+    crash_hp: Svf,
     filter: Svf,
     fast: f32,
     tail: f32,
@@ -136,6 +142,7 @@ impl Cowbell {
             decay: defaults.decay,
             tone: defaults.tone,
             level: defaults.level,
+            crash_mode: false,
             fast_coef: 0.0,
             slew_coef: 0.0,
             level_coef: 0.0,
@@ -143,6 +150,9 @@ impl Cowbell {
             active: false,
             low_osc: Square::default(),
             high_osc: Square::default(),
+            crash_oscs: Default::default(),
+            crash_noise: Noise::new(0xC8A5_4E11),
+            crash_hp: Svf::default(),
             filter: Svf::default(),
             fast: 0.0,
             tail: 0.0,
@@ -151,6 +161,17 @@ impl Cowbell {
         };
         cowbell.set_sample_rate(sample_rate);
         cowbell
+    }
+
+    /// Switches between cowbell (`false`, default) and crash cymbal (`true`).
+    pub fn set_crash_mode(&mut self, crash: bool) {
+        self.crash_mode = crash;
+    }
+
+    /// Whether crash cymbal mode is enabled.
+    #[must_use]
+    pub fn crash_mode(&self) -> bool {
+        self.crash_mode
     }
 
     /// Frequencies (Hz) of the two oscillators for the current `tune`.
@@ -175,6 +196,7 @@ impl Cowbell {
     fn reset_state(&mut self) {
         self.active = false;
         self.filter.reset();
+        self.crash_hp.reset();
         self.fast = 0.0;
         self.tail = 0.0;
         self.env = 0.0;
@@ -191,6 +213,9 @@ impl Voice for Cowbell {
         self.fast_coef = math::decay_coefficient(FAST_T60_S, self.sample_rate);
         self.slew_coef = math::tau_coefficient(SLEW_TAU_S, self.sample_rate);
         self.level_coef = 1.0 - math::tau_coefficient(LEVEL_TAU_S, self.sample_rate);
+        for (osc, &hz) in self.crash_oscs.iter_mut().zip(&CRASH_FREQS_HZ) {
+            osc.set_frequency(hz, self.sample_rate);
+        }
         self.reset_state();
     }
 
@@ -207,6 +232,27 @@ impl Voice for Cowbell {
             return;
         }
         let sr = self.sample_rate;
+        if self.crash_mode {
+            let ratio = math::exp_range(self.tune, TUNE_LOW_FACTOR, TUNE_LN_RATIO);
+            if !self.active {
+                self.reset_state();
+                self.level_now = self.level;
+            }
+            self.low_osc.set_frequency(LOW_OSC_HZ * ratio, sr);
+            self.high_osc.set_frequency(HIGH_OSC_HZ * ratio, sr);
+            for (osc, &hz) in self.crash_oscs.iter_mut().zip(&CRASH_FREQS_HZ) {
+                osc.set_frequency(hz * ratio, sr);
+            }
+            let bp_hz = 3_400.0 + 5_200.0 * self.tone;
+            self.filter.set(bp_hz, 0.85, sr);
+            self.crash_hp.set(2_200.0 + 1_800.0 * self.tone, 0.707, sr);
+            let crash_t60 = 0.55 + 2.25 * self.decay;
+            self.tail_coef = math::decay_coefficient(crash_t60, sr);
+            self.fast = self.fast.max(0.55 * velocity);
+            self.tail = self.tail.max(0.75 * velocity);
+            self.active = true;
+            return;
+        }
         let (low_hz, high_hz) = self.oscillator_frequencies_hz();
         if !self.active {
             // Fresh hit: start from a known state so every hit is the same.
@@ -239,6 +285,38 @@ impl Voice for Cowbell {
     fn process(&mut self) -> f32 {
         if !self.active {
             return 0.0;
+        }
+
+        if self.crash_mode {
+            let mut metal = self.low_osc.tick() + self.high_osc.tick();
+            for osc in &mut self.crash_oscs {
+                metal += osc.tick();
+            }
+            let noise = self.crash_noise.tick();
+            let raw = metal * (1.0 / 6.0) * 0.58 + noise * 0.62;
+            let hp = self.crash_hp.process(raw).high;
+            let f = self.filter.process(hp);
+            let y = f.band * self.filter.k() * 0.95 + f.high * 0.42;
+
+            let target = self.fast + self.tail;
+            self.env = target + self.slew_coef * (self.env - target);
+            let out = y * self.env;
+
+            self.fast *= self.fast_coef;
+            if self.fast < FLUSH {
+                self.fast = 0.0;
+            }
+            self.tail *= self.tail_coef;
+            if self.fast == 0.0 && self.tail < IDLE_THRESHOLD && self.env < IDLE_THRESHOLD {
+                self.reset_state();
+            }
+
+            self.level_now += (self.level - self.level_now) * self.level_coef;
+            if (self.level - self.level_now).abs() < LEVEL_SNAP {
+                self.level_now = self.level;
+            }
+
+            return out * self.level_now * 0.24;
         }
 
         let x = self.low_osc.tick() + self.high_osc.tick();

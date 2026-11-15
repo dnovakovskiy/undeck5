@@ -16,7 +16,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : 3,
+  workers: process.env.CI ? 2 : executablePath?.includes("Google Chrome.app") ? 1 : 3,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     browserName: "chromium",
@@ -24,7 +24,7 @@ export default defineConfig({
     launchOptions: {
       executablePath,
       // Headless audio: no gesture requirement, no real device needed.
-      args: ["--autoplay-policy=no-user-gesture-required"],
+      args: ["--autoplay-policy=no-user-gesture-required", "--window-size=1440,900"],
     },
   },
   webServer: {

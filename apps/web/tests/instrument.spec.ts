@@ -508,3 +508,362 @@ test("Maschine Groove/Humanize/Auto-Fill, Per-Sample & Group FX visual cues/shor
 
   expect(errors).toEqual([]);
 });
+
+test("MacBook Air 13-inch Booth Split fits 1280x800 and 1440x800 above the fold without scroll", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  // Enter Booth Split via top tab
+  await page.locator("#mode-booth").click();
+  await expect(app(page)).toHaveAttribute("data-surface", "booth");
+  await expect(page.locator("#grid-panel")).toBeVisible();
+  await expect(page.locator("#rmx-panel")).toBeVisible();
+  await expect(page.locator("#voice-panel")).toBeVisible();
+  await expect(page.locator("#clock")).toBeVisible();
+
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const fit = await page.evaluate(() => {
+      const gridRect = document.getElementById("grid-panel")!.getBoundingClientRect();
+      const rmxRect = document.getElementById("rmx-panel")!.getBoundingClientRect();
+      const clockRect = document.getElementById("clock")!.getBoundingClientRect();
+      return {
+        scrollHeight: document.documentElement.scrollHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        gridRight: gridRect.right,
+        rmxLeft: rmxRect.left,
+        clockBottom: clockRect.bottom,
+        rmxBottom: rmxRect.bottom,
+      };
+    });
+    // Side-by-side columns (Sequencer left, RMX-1000 right) and 100% above 800px fold
+    expect(fit.rmxLeft).toBeGreaterThanOrEqual(fit.gridRight);
+    expect(fit.clockBottom).toBeLessThanOrEqual(800);
+    expect(fit.rmxBottom).toBeLessThanOrEqual(800);
+    expect(fit.scrollHeight).toBeLessThanOrEqual(800);
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
+  }
+
+  // Shift+Backquote toggles Booth Split off and back on
+  await page.keyboard.press("Shift+Backquote");
+  await expect(app(page)).toHaveAttribute("data-surface", "sequencer");
+  await page.keyboard.press("Shift+Backquote");
+  await expect(app(page)).toHaveAttribute("data-surface", "booth");
+
+  // Also stacks cleanly on 390x844 phone viewports with 16px side gutters
+  await expectPhoneLayout(page);
+  expect(errors).toEqual([]);
+});
+
+test("TR-8S A/B/A+B variations, Last Step, Solo, Kick Attack, Ride/Crash modes & URL round-trip", async ({ page }) => {
+  const errors = guard(page);
+  await page.goto("/");
+
+  // Bank A starts with Kick step 1 = accent; switch to Bank B and turn Kick step 1 off
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
+  await page.locator("#var-bank-b").click();
+  await expect(page.locator("#var-bank-b")).toHaveAttribute("aria-pressed", "true");
+  await step(page, "kick", 1).click(); // accent -> off in Bank B
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+
+  // Switching back to Bank A preserves Kick step 1 = accent
+  await page.locator("#var-bank-a").click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
+
+  // Chain A+B (32-step phrase) & set polymetric Last Step = 12
+  await page.locator("#var-bank-ab").click();
+  await expect(page.locator("#var-bank-ab")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#last-step").selectOption("12");
+  await expect(step(page, "kick", 13)).toHaveClass(/past-last/);
+
+  // Right-click (contextmenu) toggles Accent directly on Snare step 2
+  await step(page, "snare", 2).click({ button: "right" });
+  await expect(step(page, "snare", 2)).toHaveAttribute("data-state", "accent");
+
+  // Solo Snare, adjust Kick Attack, switch OH -> 9O9 Ride & CB -> 9O9 Crash, open 10-Ch Mixer
+  await page.locator('.solo[data-solo="snare"]').click();
+  await expect(page.locator('.row[data-voice="kick"]')).toHaveClass(/muted/);
+  await page.locator("#vc-kick-attack").fill("0.75");
+  await page.locator("#vc-kick-attack").dispatchEvent("input");
+  await expect(page.locator("#vc-kick-attack-out")).toHaveText("75%");
+
+  await page.locator('[data-select="open_hat"]').click();
+  await page.locator("#vc-oh-ride").click();
+  await expect(page.locator("#vc-oh-ride")).toHaveText("9O9 Ride");
+
+  await page.locator('[data-select="cowbell"]').click();
+  await page.locator("#vc-cb-crash").click();
+  await expect(page.locator("#vc-cb-crash")).toHaveText("9O9 Crash");
+
+  await page.locator("#mixer-toggle").click();
+  await expect(page.locator("#mixer-drawer")).toBeVisible();
+
+  // Reload from #p= link and verify state round-trips
+  await reopen(page);
+  await expect(page.locator("#var-bank-ab")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#last-step")).toHaveValue("12");
+  await expect(page.locator('.solo[data-solo="snare"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#var-bank-b").click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+  expect(errors).toEqual([]);
+});
+
+test("Unified AudioWorklet RMX-1000 DSP: 24 dB/oct isolator full kill silences output and recovers", async ({ page }) => {
+  const errors = guard(page);
+  await page.goto("/");
+  await page.locator("#mode-booth").click();
+  await play(page);
+
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-30);
+
+  // Engage true 0.0 (-inf dB) full kill across all 3 Linkwitz-Riley isolator bands
+  await page.locator("#rmx-kill-low").click();
+  await page.locator("#rmx-kill-mid").click();
+  await page.locator("#rmx-kill-high").click();
+  await expect.poll(() => peakDb(page), { timeout: 5_000 }).toBeLessThan(-45);
+
+  // Reset RMX FX -> drum output immediately recovers on the unified bus
+  await page.locator("#rmx-reset").click();
+  await expect.poll(() => peakDb(page), { timeout: 5_000 }).toBeGreaterThan(-30);
+  expect(errors).toEqual([]);
+});
+
+test("RMX-1000 X-Pad quantization locks to heard beat under output latency, shuffle, and Last Step", async ({ page }) => {
+  const errors = guard(page);
+  const pattern = {
+    bpm: 110,
+    shuffle: 0.45,
+    last_step: 12,
+    voices: {
+      kick: { steps: "X---X---X---X---" },
+      snare: { steps: "----------------" },
+    },
+  };
+  await page.goto(`/#p=${base64Url(JSON.stringify(pattern))}`);
+  await page.locator("#mode-booth").click();
+
+  // Select Snare on Bank A slot 1 before arming Overdub, then arm Overdub with Quantize ON
+  await expect(page.locator("#rmx-quantize")).toHaveAttribute("aria-pressed", "true");
+  await page.locator('[data-xpad-slot="1"]').click();
+  await page.locator("#rmx-overdub").click();
+  await expect(page.locator("#rmx-overdub")).toHaveAttribute("aria-pressed", "true");
+
+  await play(page);
+  await expectPlayheadAdvances(page, 2);
+
+  // Fire X-Pad Snare right at the moment heard playhead enters Step 5 (index 4 = beat 1.00).
+  // Even though AudioWorklet/ScriptProcessor render head is ahead by outputLatency, heardBeat
+  // quantization must snap to Step 5 (index 4), NOT push forward to Step 6 (index 5).
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const appEl = document.getElementById("app")!;
+        let sawPrior = false;
+        const tick = () => {
+          const cur = Number(appEl.dataset.playingStep);
+          if (cur === 3) sawPrior = true;
+          if (sawPrior && cur === 4) {
+            const pad = document.querySelector<HTMLButtonElement>('[data-xpad-slot="1"]')!;
+            pad.dispatchEvent(
+              new PointerEvent("pointerdown", {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }),
+            );
+            resolve();
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+
+  await expect(step(page, "snare", 5)).toHaveAttribute("data-state", "accent");
+  await expect(step(page, "snare", 6)).toHaveAttribute("data-state", "off");
+
+  // Clear Snare and hold 1/8 Touch Roll while Overdub + Quantize are active (with 45% shuffle & Last Step = 12)
+  await page.locator("#rmx-voice-clear").click();
+  await expect(step(page, "snare", 5)).toHaveAttribute("data-state", "off");
+
+  const roll8 = page.locator('[data-roll-div="8"]');
+  await roll8.dispatchEvent("pointerdown", { button: 0 });
+  await page.waitForTimeout(1100);
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true })));
+
+  // Every recorded 1/8 roll hit must land on 0-based even 8th-note indices (data-step 1, 3, 5, 7, 9, 11)
+  const snareStates = await page.evaluate(() =>
+    Array.from({ length: 16 }, (_, i) =>
+      document.querySelector(`.step[data-voice="snare"][data-step="${i + 1}"]`)?.getAttribute("data-state") ?? "off",
+    ),
+  );
+  const activeIndices = snareStates
+    .map((st, idx) => (st !== "off" ? idx : -1))
+    .filter((idx) => idx >= 0);
+  expect(activeIndices.length).toBeGreaterThanOrEqual(2);
+  for (const idx of activeIndices) {
+    expect(idx % 2).toBe(0);
+    expect(idx).toBeLessThan(12);
+  }
+  expect(errors).toEqual([]);
+});
+
+test("Hardware visual/color schemes switch palettes cleanly and persist across reload", async ({ page }) => {
+  const errors = guard(page);
+  await page.goto("/");
+
+  // Default 8O8 Booth theme starts on #0f1115 dark background
+  const defaultBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+  expect(defaultBg).toBe("rgb(15, 17, 21)");
+
+  const themeSelect = page.locator("#theme-select");
+  await expect(themeSelect).toHaveValue("default");
+
+  // Switch to 9O9 Silver light industrial chassis
+  await themeSelect.selectOption("tr-silver");
+  await expect(app(page)).toHaveAttribute("data-theme", "tr-silver");
+  const silverStyle = await page.evaluate(() => ({
+    bg: getComputedStyle(document.documentElement).backgroundColor,
+    scheme: getComputedStyle(document.documentElement).colorScheme,
+  }));
+  expect(silverStyle.bg).toBe("rgb(207, 211, 218)");
+  expect(silverStyle.scheme).toBe("light");
+
+  // Cycle through 8O8 Classic, TR-8S Neon, Pioneer CDJ, and NI Maschine
+  for (const id of ["tr-classic", "tr-neon", "pioneer", "maschine"] as const) {
+    await themeSelect.selectOption(id);
+    await expect(app(page)).toHaveAttribute("data-theme", id);
+  }
+
+  // Reload and verify NI Maschine theme persisted in storage
+  await page.reload();
+  await expect(app(page)).toHaveAttribute("data-theme", "maschine");
+  await expect(themeSelect).toHaveValue("maschine");
+  expect(errors).toEqual([]);
+});
+
+test("64-step 4-bar A/B/C/D and A-D chain variations edit independent bars, copy forward, and round-trip via #p=", async ({ page }) => {
+  const errors = guard(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Clear" }).click();
+
+  // Bar A: place Snare hit on step 5
+  await step(page, "snare", 5).click();
+  await expect(step(page, "snare", 5)).toHaveAttribute("data-state", "on");
+
+  // Copy A -> B, then add Snare step 13 on Bar B
+  await page.locator("#var-copy-ab").click();
+  await expect(page.locator("#var-bank-b")).toHaveAttribute("aria-pressed", "true");
+  await expect(step(page, "snare", 5)).toHaveAttribute("data-state", "on");
+  await step(page, "snare", 13).click();
+
+  // Select Bar C, place Clap on step 9; select Bar D, inject Auto-Fill turnaround
+  await page.locator("#var-bank-c").click();
+  await expect(page.locator("#var-bank-c")).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await step(page, "clap", 9).click();
+  await expect(step(page, "clap", 9)).toHaveAttribute("data-state", "on");
+
+  await page.locator("#var-bank-d").click();
+  await expect(page.locator("#var-bank-d")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#var-fill").click();
+  await expect(step(page, "snare", 16)).toHaveAttribute("data-state", "accent-flam");
+
+  // Engage 64-step 4-bar A-D chain and verify live bar inspection keeps A-D active
+  await page.locator("#var-bank-abcd").click();
+  await expect(page.locator("#var-bank-abcd")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#var-bank-a").click();
+  await expect(page.locator("#var-bank-abcd")).toHaveAttribute("aria-pressed", "true");
+  await expect(step(page, "snare", 13)).toHaveAttribute("data-state", "off");
+
+  // Reload from URL #p= hash and verify all 4 bars + 64-step A-D mode survived
+  await reopen(page);
+  await expect(page.locator("#var-bank-abcd")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#var-bank-b").click();
+  await expect(step(page, "snare", 13)).toHaveAttribute("data-state", "on");
+  await page.locator("#var-bank-c").click();
+  await expect(step(page, "clap", 9)).toHaveAttribute("data-state", "on");
+  await page.locator("#var-bank-d").click();
+  await expect(step(page, "snare", 16)).toHaveAttribute("data-state", "accent-flam");
+  expect(errors).toEqual([]);
+});
+
+test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, 16-step strip sync & zero-scroll Booth Split swap", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  // Switch to standalone DJS-1000 Deck surface
+  await page.locator("#mode-djs").click();
+  await expect(app(page)).toHaveAttribute("data-surface", "djs");
+  await expect(page.locator("#djs-panel")).toBeVisible();
+  await expect(page.locator("#grid-panel")).toBeHidden();
+
+  // Launch Scene 2 -> loads 4-bar 64-step scene
+  await page.locator('[data-djs-scene="1"]').click();
+  await expect(page.locator('[data-djs-scene="1"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-djs-bar="abcd"]')).toHaveAttribute("aria-pressed", "true");
+
+  // Select Snare via Pad 2 in TRACK PLAY mode, then toggle step 3 on front-edge 16-step strip
+  await page.locator('[data-djs-pad="1"]').dispatchEvent("pointerdown", { button: 0 });
+  await expect(page.locator("#djs-screen-track")).toContainText("SD SNARE");
+  const djsStep3 = page.locator('[data-djs-step="3"]');
+  const beforeState = await djsStep3.getAttribute("data-state");
+  await djsStep3.click();
+  await expect(djsStep3).not.toHaveAttribute("data-state", beforeState ?? "off");
+
+  // Switch pad modes (MUTE / SOLO, 16-PAD PITCH, HOT ROLL) and Capture Scene
+  await page.locator('[data-djs-pad-mode="mute"]').click();
+  await expect(page.locator('[data-djs-pad-mode="mute"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('[data-djs-pad-mode="scale"]').click();
+  await expect(page.locator('[data-djs-pad="7"]')).toContainText("0 st");
+  await page.locator('[data-djs-pad-mode="slice"]').click();
+  await expect(page.locator('[data-djs-pad="2"]')).toContainText("1/16");
+  await page.locator("#djs-capture-scene").click();
+  await expect(page.locator('[data-djs-scene="1"]')).toContainText("Custom");
+
+  // Verify 390x844 phone layout on DJS-1000 surface
+  await expectPhoneLayout(page);
+
+  // Enter MacBook Air 13" Booth Split and swap left deck from TR Grid -> DJS-1000 -> TR Grid
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.locator("#mode-booth").click();
+  await expect(page.locator("#booth-swap-djs")).toBeVisible();
+  await page.locator("#booth-swap-djs").click();
+  await expect(app(page)).toHaveAttribute("data-booth-deck", "djs");
+  await expect(page.locator("#djs-panel")).toBeVisible();
+  await expect(page.locator("#rmx-panel")).toBeVisible();
+
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const fit = await page.evaluate(() => {
+      const djsRect = document.getElementById("djs-panel")!.getBoundingClientRect();
+      const rmxRect = document.getElementById("rmx-panel")!.getBoundingClientRect();
+      const clockRect = document.getElementById("clock")!.getBoundingClientRect();
+      return {
+        scrollHeight: document.documentElement.scrollHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        djsRight: djsRect.right,
+        rmxLeft: rmxRect.left,
+        clockBottom: clockRect.bottom,
+        rmxBottom: rmxRect.bottom,
+      };
+    });
+    expect(fit.rmxLeft).toBeGreaterThanOrEqual(fit.djsRight);
+    expect(fit.clockBottom).toBeLessThanOrEqual(800);
+    expect(fit.rmxBottom).toBeLessThanOrEqual(800);
+    expect(fit.scrollHeight).toBeLessThanOrEqual(800);
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
+  }
+
+  // Swap back to TR Grid inside Booth Split and verify step 3 edit synced bidirectionally
+  await page.locator("#booth-swap-tr").click();
+  await expect(app(page)).toHaveAttribute("data-booth-deck", "sequencer");
+  await expect(page.locator("#grid-panel")).toBeVisible();
+  await expect(step(page, "snare", 3)).not.toHaveAttribute("data-state", beforeState ?? "off");
+  expect(errors).toEqual([]);
+});

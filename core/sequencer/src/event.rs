@@ -54,8 +54,14 @@ pub enum VoiceParam {
     Level,
     /// Noise amount (snare).
     Snappy,
-    /// Timbre / filter position.
+    /// Timbre / filter position (or kick attack punch).
     Tone,
+    /// Per-voice auxiliary Echo send (`0..=1`).
+    SendEcho,
+    /// Per-voice auxiliary Reverb send (`0..=1`).
+    SendReverb,
+    /// Per-voice Acid Filter bus assignment (`0..=1`).
+    SendFilter,
 }
 
 /// Master-section controls.
@@ -65,6 +71,12 @@ pub enum MasterParam {
     OutputGain,
     /// Soft safety limiter on/off (`value > 0.5` is on).
     Limiter,
+    /// Multi-era drum voice synthesis model (`0..=7`).
+    KitModel,
+    /// Cymbal mode bitmask (`bit 0` = Ride on OpenHat, `bit 1` = Crash on Cowbell).
+    CymbalMode,
+    /// Solo voice bitmask (`0..1024`).
+    SoloMask,
 }
 
 impl Event {

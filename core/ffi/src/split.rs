@@ -144,9 +144,14 @@ pub unsafe extern "C" fn p5_control_load_pattern_json(
     let now = c.control.render_timing().position;
     c.control.set_tempo(spec.bpm, now);
     c.control.set_pattern(pattern);
+    c.control.set_kit_model(spec.kit_model, now);
+    c.control.set_cymbal_mode(spec.cymbal_mode, now);
+    c.control.set_solo_mask(spec.solo_mask(), now);
     for voice in sequencer::VoiceId::ALL {
         c.control
             .set_voice_params(voice, &spec.voice_params(voice), now);
+        c.control
+            .set_voice_fx_sends(voice, spec.voice_fx_sends(voice), now);
     }
     c.control.set_output_gain(spec.render.output_gain, now);
     c.control.set_limiter(spec.render.limiter, now);
@@ -184,6 +189,14 @@ fn drain_source(c: &mut P5Control) {
             }
             SourceEvent::Status { message, .. } => {
                 c.status = CString::new(message.replace('\0', " ")).unwrap_or_default();
+            }
+            SourceEvent::Transport { playing } => {
+                let now = c.control.render_timing().position;
+                if playing {
+                    c.control.start(now);
+                } else {
+                    c.control.stop();
+                }
             }
         }
     }
@@ -243,14 +256,16 @@ pub unsafe extern "C" fn p5_control_is_playing(control: *mut P5Control) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn p5_control_playing_step(control: *mut P5Control) -> i32 {
     let Some(c) = ctl(control) else { return -1 };
-    if !c.control.is_playing() {
+    let now = c.control.render_timing().position;
+    if !c.control.is_playing() || c.control.is_launch_armed(now) {
         return -1;
     }
-    let beat = c.control.beat_at(c.control.render_timing().position);
+    let beat = c.control.beat_at(now);
     if beat < 0.0 {
         return -1;
     }
-    ((beat / sequencer::BEATS_PER_STEP).floor() as i64).rem_euclid(16) as i32
+    let span = c.control.pattern().effective_step_count().max(1) as i64;
+    ((beat / sequencer::BEATS_PER_STEP).floor() as i64).rem_euclid(span) as i32
 }
 
 /// Tempo of the active clock.

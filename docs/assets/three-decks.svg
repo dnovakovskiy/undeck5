@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 210" width="960" height="210" role="img" aria-label="How player5 works: 1. Build a groove, 2. Mangle with RMX FX, 3. Sync or jam solo">
+  <rect width="960" height="210" rx="14" fill="#0b0e16" stroke="#242d42" stroke-width="2" />
+
+  <!-- Card 1 -->
+  <rect x="24" y="24" width="276" height="162" rx="12" fill="#131724" stroke="#ff7a1a" stroke-width="2" />
+  <text x="44" y="54" fill="#ff7a1a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="800" letter-spacing="1.2">1 · BUILD THE GROOVE</text>
+  <text x="44" y="80" fill="#f1f5f9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700">TR Grid  ⇄  DJS-1000 Pads</text>
+  <text x="44" y="106" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• 10 punchy synth drum voices</text>
+  <text x="44" y="126" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Up to 64 steps (Bars A–D)</text>
+  <text x="44" y="146" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• 1-click presets, swing &amp; fills</text>
+  <rect x="44" y="160" width="128" height="16" rx="4" fill="#2b1c14" />
+  <text x="52" y="172" fill="#ffb066" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">LAPTOP KEYS = PADS</text>
+
+  <!-- Arrow 1 -> 2 -->
+  <g stroke="#00d4ff" stroke-width="2.5" fill="none">
+    <line x1="306" y1="105" x2="336" y2="105" />
+    <polyline points="328,97 338,105 328,113" />
+  </g>
+
+  <!-- Card 2 -->
+  <rect x="342" y="24" width="276" height="162" rx="12" fill="#131724" stroke="#00d4ff" stroke-width="2" />
+  <text x="362" y="54" fill="#00d4ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="800" letter-spacing="1.2">2 · COOK THE DROP</text>
+  <text x="362" y="80" fill="#f1f5f9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700">RMX-1000 Remix Station</text>
+  <text x="362" y="106" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Kill bass/mids/highs cleanly</text>
+  <text x="362" y="126" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Quantized 1/8..1/32 snare rolls</text>
+  <text x="362" y="146" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Spiral/Echo risers + Vinyl Brake</text>
+  <rect x="362" y="160" width="154" height="16" rx="4" fill="#0d2533" />
+  <text x="370" y="172" fill="#7ce8ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">HOLD [R] = INSTANT DROP</text>
+
+  <!-- Arrow 2 -> 3 -->
+  <g stroke="#00f59b" stroke-width="2.5" fill="none">
+    <line x1="624" y1="105" x2="654" y2="105" />
+    <polyline points="646,97 656,105 646,113" />
+  </g>
+
+  <!-- Card 3 -->
+  <rect x="660" y="24" width="276" height="162" rx="12" fill="#131724" stroke="#00f59b" stroke-width="2" />
+  <text x="680" y="54" fill="#00f59b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="800" letter-spacing="1.2">3 · JAM SOLO OR SYNC</text>
+  <text x="680" y="80" fill="#f1f5f9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700">Bedroom to Club Booth</text>
+  <text x="680" y="106" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Solo on headphones/speakers</text>
+  <text x="680" y="126" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Ableton Link (Traktor/Serato/Live)</text>
+  <text x="680" y="146" fill="#9fb0c9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">• Pro DJ Link &amp; MIDI Clock lock</text>
+  <rect x="680" y="160" width="166" height="16" rx="4" fill="#0c291e" />
+  <text x="688" y="172" fill="#6ee7b7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700">SHARE BEATS AS A URL LINK</text>
+</svg>

@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-label="player5 — 3-in-1 Bedroom DJ Drum Machine, DJS-1000 Sequencer, and RMX-1000 Remix Station">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#070811" />
+      <stop offset="58%" stop-color="#110d24" />
+      <stop offset="100%" stop-color="#090b12" />
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff2a85" stop-opacity="0.9" />
+      <stop offset="55%" stop-color="#ff7a1a" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#ffcc33" stop-opacity="0.15" />
+    </linearGradient>
+    <linearGradient id="cyanNeon" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00f59b" />
+      <stop offset="50%" stop-color="#00d4ff" />
+      <stop offset="100%" stop-color="#ff2bd6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Chassis / Night Club Sky -->
+  <rect width="960" height="320" rx="18" fill="url(#bgGrad)" stroke="#29324a" stroke-width="2" />
+
+  <!-- Retro Synthwave Segmented Sun -->
+  <circle cx="480" cy="148" r="84" fill="url(#sunGrad)" opacity="0.32" />
+  <rect x="380" y="152" width="200" height="4" fill="#110d24" />
+  <rect x="380" y="166" width="200" height="5" fill="#110d24" />
+  <rect x="380" y="182" width="200" height="7" fill="#110d24" />
+  <rect x="380" y="200" width="200" height="9" fill="#110d24" />
+
+  <!-- Perspective Neon Horizon Grid -->
+  <g stroke="#ff2bd6" stroke-opacity="0.24" stroke-width="1">
+    <line x1="0" y1="196" x2="960" y2="196" stroke="#00d4ff" stroke-opacity="0.55" stroke-width="1.5" />
+    <line x1="0" y1="216" x2="960" y2="216" />
+    <line x1="0" y1="242" x2="960" y2="242" />
+    <line x1="0" y1="274" x2="960" y2="274" />
+    <line x1="480" y1="196" x2="40" y2="320" />
+    <line x1="480" y1="196" x2="190" y2="320" />
+    <line x1="480" y1="196" x2="340" y2="320" />
+    <line x1="480" y1="196" x2="480" y2="320" />
+    <line x1="480" y1="196" x2="620" y2="320" />
+    <line x1="480" y1="196" x2="770" y2="320" />
+    <line x1="480" y1="196" x2="920" y2="320" />
+  </g>
+
+  <!-- Top OLED Telemetry Pill -->
+  <rect x="32" y="24" width="236" height="28" rx="14" fill="#0b101b" stroke="#00d4ff" stroke-width="1.2" />
+  <circle cx="48" cy="38" r="5" fill="#00f59b" filter="url(#glow)" />
+  <text x="62" y="42" fill="#d9f7ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" letter-spacing="1">124.0 BPM · BEAT SYNC</text>
+
+  <rect x="716" y="24" width="212" height="28" rx="14" fill="#0b101b" stroke="#ff2bd6" stroke-width="1.2" />
+  <text x="822" y="42" text-anchor="middle" fill="#ffd6f7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" letter-spacing="1">ZERO INSTALL · BROWSER</text>
+
+  <!-- Glowing Logo + Subtitle -->
+  <text x="480" y="96" text-anchor="middle" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="56" font-weight="800" letter-spacing="4">player<tspan fill="#ff7a1a" filter="url(#glow)">5</tspan></text>
+  <text x="480" y="124" text-anchor="middle" fill="#b8c7e0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" letter-spacing="2.2">THE 5TH DECK FOR BEDROOM DJs &amp; LATE-NIGHT BEATMAKERS</text>
+
+  <!-- 3-in-1 Hardware Chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700">
+    <rect x="122" y="146" width="224" height="34" rx="8" fill="#141824" stroke="#ff7a1a" stroke-width="1.6" />
+    <text x="234" y="168" text-anchor="middle" fill="#ffb37a">TR-REC 64-STEP DRUMS</text>
+
+    <rect x="364" y="146" width="232" height="34" rx="8" fill="#141824" stroke="#00d4ff" stroke-width="1.6" />
+    <text x="480" y="168" text-anchor="middle" fill="#7ce8ff">DJS-1000 16-PAD DECK</text>
+
+    <rect x="614" y="146" width="224" height="34" rx="8" fill="#141824" stroke="#ff2bd6" stroke-width="1.6" />
+    <text x="726" y="168" text-anchor="middle" fill="#ff94ea">RMX-1000 REMIX FX</text>
+  </g>
+
+  <!-- Iconic 16-Step Sequencer Strip Across the Front Edge -->
+  <rect x="64" y="218" width="832" height="74" rx="12" fill="#0d111a" fill-opacity="0.92" stroke="#2a354d" stroke-width="1.5" />
+  <text x="84" y="238" fill="#8ea0b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" letter-spacing="1.5">BAR A–D · 64-STEP PHRASE SEQUENCER</text>
+  <text x="876" y="238" text-anchor="end" fill="#00f59b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" letter-spacing="1.2">PLAYHEAD: STEP 05</text>
+
+  <!-- 16 Glowing Step Keys (4 color groups: Vermilion, Orange, Gold, Ivory; Step 5 highlighted as active playhead) -->
+  <g transform="translate(84, 248)">
+    <!-- Steps 1-4 (Red) -->
+    <rect x="0"   y="0" width="44" height="30" rx="5" fill="#e63926" stroke="#ffffff" stroke-width="1.5" />
+    <rect x="50"  y="0" width="44" height="30" rx="5" fill="#1b202d" stroke="#e63926" stroke-width="1.2" />
+    <rect x="100" y="0" width="44" height="30" rx="5" fill="#e63926" />
+    <rect x="150" y="0" width="44" height="30" rx="5" fill="#1b202d" stroke="#e63926" stroke-width="1.2" />
+    <!-- Steps 5-8 (Orange + Cyan Playhead on 5) -->
+    <rect x="206" y="-2" width="44" height="34" rx="6" fill="#f4821f" stroke="#00e5ff" stroke-width="3" filter="url(#glow)" />
+    <rect x="256" y="0" width="44" height="30" rx="5" fill="#1b202d" stroke="#f4821f" stroke-width="1.2" />
+    <rect x="306" y="0" width="44" height="30" rx="5" fill="#f4821f" />
+    <rect x="356" y="0" width="44" height="30" rx="5" fill="#f4821f" />
+    <!-- Steps 9-12 (Yellow) -->
+    <rect x="412" y="0" width="44" height="30" rx="5" fill="#f7cd2e" stroke="#ffffff" stroke-width="1.5" />
+    <rect x="462" y="0" width="44" height="30" rx="5" fill="#1b202d" stroke="#f7cd2e" stroke-width="1.2" />
+    <rect x="512" y="0" width="44" height="30" rx="5" fill="#f7cd2e" />
+    <rect x="562" y="0" width="44" height="30" rx="5" fill="#1b202d" stroke="#f7cd2e" stroke-width="1.2" />
+    <!-- Steps 13-16 (Cream Turnaround Fill) -->
+    <rect x="618" y="0" width="44" height="30" rx="5" fill="#f4efe1" stroke="#ffffff" stroke-width="1.5" />
+    <rect x="668" y="0" width="44" height="30" rx="5" fill="#f4efe1" />
+    <rect x="718" y="0" width="44" height="30" rx="5" fill="#f4efe1" />
+    <rect x="768" y="0" width="24" height="30" rx="5" fill="#00f59b" />
+  </g>
+
+  <!-- Accent Bottom Bar -->
+  <rect x="180" y="314" width="600" height="3" rx="1.5" fill="url(#cyanNeon)" />
+</svg>

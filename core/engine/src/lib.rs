@@ -132,9 +132,14 @@ impl Engine {
         let now = self.renderer.position();
         self.control.set_tempo(spec.bpm, now);
         self.control.set_pattern(pattern);
+        self.control.set_kit_model(spec.kit_model, now);
+        self.control.set_cymbal_mode(spec.cymbal_mode, now);
+        self.control.set_solo_mask(spec.solo_mask(), now);
         for voice in VoiceId::ALL {
             let params = spec.voice_params(voice);
             self.control.set_voice_params(voice, &params, now);
+            self.control
+                .set_voice_fx_sends(voice, spec.voice_fx_sends(voice), now);
         }
         self.control.set_output_gain(spec.render.output_gain, now);
         self.control.set_limiter(spec.render.limiter, now);
@@ -193,19 +198,34 @@ impl Engine {
         self.control.is_locked()
     }
 
-    /// Pattern step (`0..16`) audible at the current render position, or
-    /// `None` when stopped. For playhead displays.
+    /// Latest follower phase residual in milliseconds (`0.0` for internal
+    /// clock or unlocked).
+    #[must_use]
+    pub fn phase_error_ms(&self) -> f64 {
+        self.control.phase_error_ms()
+    }
+
+    /// Whether playback is currently armed for a quantized launch boundary.
+    #[must_use]
+    pub fn is_launch_armed(&self) -> bool {
+        self.control.is_launch_armed(self.renderer.position())
+    }
+
+    /// Pattern step (`0..effective_step_count`) audible at the current render
+    /// position, or `None` when stopped or armed before launch.
     #[must_use]
     pub fn playing_step(&self) -> Option<usize> {
-        if !self.control.is_playing() {
+        let now = self.renderer.position();
+        if !self.control.is_playing() || self.control.is_launch_armed(now) {
             return None;
         }
-        let beat = self.control.beat_at(self.renderer.position());
+        let beat = self.control.beat_at(now);
         if beat < 0.0 {
             return None;
         }
         let step = (beat / sequencer::BEATS_PER_STEP).floor() as u64;
-        Some((step % sequencer::STEP_COUNT as u64) as usize)
+        let span = self.control.pattern().effective_step_count().max(1) as u64;
+        Some((step % span) as usize)
     }
 
     /// Stops automatically after `steps` steps, counted from the first step
@@ -221,9 +241,22 @@ impl Engine {
         self.control.start(now);
     }
 
+    /// Starts playback quantized to `quantum_beats` (e.g. `4.0` for next bar
+    /// downbeat) when following a locked external clock, else immediately.
+    pub fn start_quantized(&mut self, quantum_beats: f64) {
+        let now = self.renderer.position();
+        self.control.start_quantized(now, quantum_beats);
+    }
+
     /// Stops scheduling new steps.
     pub fn stop(&mut self) {
         self.control.stop();
+    }
+
+    /// Queues an immediate one-shot voice trigger at the current position.
+    pub fn trigger_voice(&mut self, voice: VoiceId, velocity: f32) -> bool {
+        let now = self.renderer.position();
+        self.control.trigger_voice_now(voice, velocity, now)
     }
 
     /// Renders one block of mono audio, ticking the control half first
@@ -232,6 +265,20 @@ impl Engine {
         let now = self.renderer.position();
         self.control.tick(now);
         self.renderer.process(out);
+    }
+
+    /// Renders one block split across dry + per-voice FX send/insert buses,
+    /// ticking the control half first.
+    pub fn render_buses(
+        &mut self,
+        dry: &mut [f32],
+        echo: &mut [f32],
+        reverb: &mut [f32],
+        filter: &mut [f32],
+    ) {
+        let now = self.renderer.position();
+        self.control.tick(now);
+        self.renderer.process_buses(dry, echo, reverb, filter);
     }
 
     /// Renders `frames` samples in blocks of `block_size`. Offline helper;

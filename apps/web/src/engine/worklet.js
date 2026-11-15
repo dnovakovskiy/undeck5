@@ -1,14 +1,8 @@
-// AudioWorkletProcessor hosting the player5 core (ADR-0004, ADR-0010).
+// AudioWorkletProcessor hosting the player5 core + unified stereo RMX-1000 &
+// per-voice FX DSP (ADR-0004, ADR-0010).
 //
-// Not loaded from a URL: src/engine/audio-engine.ts concatenates host.js
-// and this file into one module source and loads it from a Blob URL, so
-// the worklet ships inside the main bundle (and the single-file build).
-// `EngineHost` comes from host.js in that same module scope.
-//
-// The whole engine (scheduler + renderer) runs in here, single-threaded,
-// driven by the worklet's own sample clock. The main thread never touches
-// audio; it posts pattern bytes, transport and clock messages through the
-// port, and they are applied between blocks.
+// Concatenated with host.js into one Blob module by src/engine/audio-engine.ts
+// so the entire audio engine runs inside a single sample-accurate worklet.
 
 /* global EngineHost, AudioWorkletProcessor, registerProcessor, sampleRate, currentFrame */
 
@@ -28,14 +22,17 @@ class Player5Processor extends AudioWorkletProcessor {
     };
   }
 
-  process(_inputs, outputs) {
+  process(inputs, outputs) {
     const host = this.host;
-    if (!host) return false;
-    if (!host.alive) return false;
+    if (!host || !host.alive) return false;
     const output = outputs[0];
     if (!output || output.length === 0) return true;
-    const mono = host.process(output[0].length, currentFrame);
-    for (let c = 0; c < output.length; c++) output[c].set(mono);
+    const input = inputs && inputs[0];
+    const inL = input && input[0] ? input[0] : null;
+    const inR = input && input[1] ? input[1] : inL;
+    const pair = host.processStereo(output[0].length, currentFrame, inL, inR);
+    output[0].set(pair[0]);
+    if (output.length > 1) output[1].set(pair[1]);
     return true;
   }
 }

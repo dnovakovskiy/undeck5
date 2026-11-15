@@ -55,7 +55,7 @@ export class TimeMap {
 
   /** Context time (s) heard at performance time `ms`, or null. */
   contextTimeAt(ms: number): number | null {
-    if (performance.now() - this.lastSampleMs > 20) this.sample();
+    if (this.k === null || performance.now() - this.lastSampleMs > 20) this.sample();
     return this.k === null ? null : this.k + ms / 1000;
   }
 

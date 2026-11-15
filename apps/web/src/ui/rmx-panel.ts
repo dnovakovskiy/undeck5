@@ -70,8 +70,17 @@ const ROLL_DIVS: readonly RollDivision[] = [1, 2, 4, 8, 16, 32];
 export class RmxPanel {
   private state: RmxState = defaultRmxState();
   private rollPointerDown = false;
+  private rollStartY = 0;
+  private rollBasePitch = 0;
   private rollLatched = false;
   private overdubStepCursor = 0;
+  private rotaryRefs: {
+    input: HTMLInputElement;
+    arc: SVGCircleElement;
+    needle: SVGLineElement;
+    min: number;
+    max: number;
+  }[] = [];
 
   constructor(
     private readonly root: HTMLElement,
@@ -82,6 +91,7 @@ export class RmxPanel {
         this.cb.onOverdubHit(voice, stepIdx, accent, pitch);
       }
     });
+    this.enhanceRotaryKnobs();
     this.bind();
     this.render();
   }
@@ -91,20 +101,20 @@ export class RmxPanel {
   }
 
   /** Triggers one of the 4 X-Pad slots (0..3) in the active bank. */
-  triggerPadSlot(slot: number): void {
+  triggerPadSlot(slot: number, eventTimeMs?: number): void {
     const bank = this.state.xpadBankB ? BANK_B : BANK_A;
     const pad = bank[slot];
     if (!pad) return;
     this.state.xpadVoice = pad.id;
-    this.firePadHit(true);
-    this.pushState();
+    this.firePadHit(true, eventTimeMs);
+    this.pushState(eventTimeMs);
   }
 
   /** Triggers any of the 10 voices directly through the RMX X-Pad synth & overdub. */
-  triggerVoicePad(voice: VoiceId, accent = true): void {
+  triggerVoicePad(voice: VoiceId, accent = true, eventTimeMs?: number): void {
     this.state.xpadVoice = voice;
-    this.firePadHit(accent);
-    this.pushState();
+    this.firePadHit(accent, eventTimeMs);
+    this.pushState(eventTimeMs);
   }
 
   /** Engages or releases the spring-loaded Release FX lever from keyboard shortcuts. */
@@ -124,8 +134,8 @@ export class RmxPanel {
   }
 
   /** Starts a beat-roll division from a held keyboard key. */
-  holdRoll(div: RollDivision): void {
-    this.startRoll(div);
+  holdRoll(div: RollDivision, eventTimeMs?: number): void {
+    this.startRoll(div, eventTimeMs);
   }
 
   /** Ends a keyboard-held beat roll unless Latch Roll is active. */
@@ -136,6 +146,89 @@ export class RmxPanel {
     }
   }
 
+  private enhanceRotaryKnobs(): void {
+    const circ = 2 * Math.PI * 13;
+    const arcSpan = circ * 0.75; // 270 deg sweep
+    for (const knob of this.root.querySelectorAll<HTMLElement>(".knob")) {
+      const input = knob.querySelector<HTMLInputElement>('input[type="range"]');
+      if (!input || knob.querySelector(".rotary-dial")) continue;
+      const min = Number(input.min || 0);
+      const max = Number(input.max || 1);
+      const step = Number(input.step || 0.01);
+      const resetVal = input.id.includes("scene-sub") ? 0.5 : 0;
+
+      const dial = document.createElement("span");
+      dial.className = "rotary-dial";
+      dial.setAttribute("aria-hidden", "true");
+      dial.title = "Drag up/down (Shift: fine) · Double-click to reset";
+      dial.innerHTML =
+        `<svg class="rotary-svg" viewBox="0 0 36 36">` +
+        `<circle class="rotary-track" cx="18" cy="18" r="13" stroke-dasharray="${arcSpan.toFixed(2)} ${circ.toFixed(2)}" />` +
+        `<circle class="rotary-arc" cx="18" cy="18" r="13" stroke-dasharray="0 ${circ.toFixed(2)}" />` +
+        `<line class="rotary-needle" x1="18" y1="18" x2="18" y2="6.5" />` +
+        `</svg>`;
+      knob.classList.add("has-rotary");
+      knob.prepend(dial);
+
+      const arc = dial.querySelector("circle.rotary-arc") as SVGCircleElement | null;
+      const needle = dial.querySelector("line.rotary-needle") as SVGLineElement | null;
+      if (arc && needle) {
+        this.rotaryRefs.push({ input, arc, needle, min, max });
+      }
+
+      let dragging = false;
+      let startY = 0;
+      let startVal = 0;
+      dial.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        dragging = true;
+        startY = e.clientY;
+        startVal = Number(input.value);
+        try {
+          dial.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore synthetic pointer events */
+        }
+      });
+      dial.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const scale = e.shiftKey ? 360 : 110;
+        const delta = ((startY - e.clientY) / scale) * (max - min);
+        const raw = Math.max(min, Math.min(max, startVal + delta));
+        const snapped = Math.round(raw / step) * step;
+        const fixed = Number(snapped.toFixed(4));
+        if (Number(input.value) !== fixed) {
+          input.value = String(fixed);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      });
+      const stopDrag = () => {
+        dragging = false;
+      };
+      dial.addEventListener("pointerup", stopDrag);
+      dial.addEventListener("pointercancel", stopDrag);
+      dial.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        input.value = String(resetVal);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+  }
+
+  private syncRotaryVisuals(): void {
+    const circ = 2 * Math.PI * 13;
+    const arcSpan = circ * 0.75;
+    for (const r of this.rotaryRefs) {
+      const val = Number(r.input.value);
+      const norm = r.max > r.min ? Math.max(0, Math.min(1, (val - r.min) / (r.max - r.min))) : 0;
+      const deg = -135 + norm * 270;
+      r.needle.setAttribute("transform", `rotate(${deg.toFixed(1)} 18 18)`);
+      const activeLen = arcSpan * norm;
+      r.arc.setAttribute("stroke-dasharray", `${activeLen.toFixed(2)} ${circ.toFixed(2)}`);
+    }
+  }
+
   private bind(): void {
     const $ = <T extends HTMLElement>(id: string) => this.root.querySelector<T>(`#${id}`)!;
 
@@ -143,8 +236,21 @@ export class RmxPanel {
     $("rmx-reset").addEventListener("click", () => {
       this.stopRoll();
       this.rollLatched = false;
+      if (this.state.extInput) {
+        void this.cb.audio.setExternalInput(false);
+      }
       this.state = defaultRmxState();
       this.pushState();
+    });
+
+    // External Live Stereo Input toggle (hidden in single-file build)
+    const extBtn = this.root.querySelector<HTMLButtonElement>("#rmx-ext-in");
+    extBtn?.addEventListener("click", () => {
+      const want = !this.state.extInput;
+      void this.cb.audio.setExternalInput(want).then((ok) => {
+        this.state.extInput = ok;
+        this.pushState();
+      });
     });
 
     // Scene FX buttons (Build Up + Break Down)
@@ -169,6 +275,26 @@ export class RmxPanel {
     const sceneSub = $<HTMLInputElement>("rmx-scene-sub");
     sceneSub.addEventListener("input", () => {
       this.state.sceneSub = Number(sceneSub.value);
+      this.pushState();
+    });
+    sceneSub.addEventListener("dblclick", () => {
+      this.state.sceneSub = 0.5;
+      this.pushState();
+    });
+
+    const sceneSub2 = this.root.querySelector<HTMLInputElement>("#rmx-scene-sub2");
+    if (sceneSub2) {
+      sceneSub2.addEventListener("input", () => {
+        this.state.sceneSub2 = Number(sceneSub2.value);
+        this.pushState();
+      });
+      sceneSub2.addEventListener("dblclick", () => {
+        this.state.sceneSub2 = 0.5;
+        this.pushState();
+      });
+    }
+    sceneAmt.addEventListener("dblclick", () => {
+      this.state.sceneAmount = 0;
       this.pushState();
     });
 
@@ -223,16 +349,19 @@ export class RmxPanel {
       this.pushState();
     });
 
-    // X-Pad 4 Voice Pads
+    // X-Pad 4 Voice Pads (pointerdown for zero finger-lift lag + keyboard click fallback)
     for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-xpad-slot]")) {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
         const slot = Number(btn.dataset.xpadSlot);
-        const bank = this.state.xpadBankB ? BANK_B : BANK_A;
-        const pad = bank[slot];
-        if (!pad) return;
-        this.state.xpadVoice = pad.id;
-        this.firePadHit(true);
-        this.pushState();
+        this.triggerPadSlot(slot, e.timeStamp);
+      });
+      btn.addEventListener("click", (e) => {
+        if (e.detail === 0) {
+          const slot = Number(btn.dataset.xpadSlot);
+          this.triggerPadSlot(slot, e.timeStamp);
+        }
       });
     }
 
@@ -253,14 +382,16 @@ export class RmxPanel {
       this.pushState();
     });
 
-    $("rmx-roll-latch").addEventListener("click", () => {
+    $("rmx-roll-latch").addEventListener("click", (e) => {
       this.rollLatched = !this.rollLatched;
       if (this.rollLatched) {
-        this.startRoll(this.state.xpadRollDiv);
+        this.startRoll(this.state.xpadRollDiv, e.timeStamp);
       } else if (!this.rollPointerDown) {
         this.stopRoll();
+        this.pushState(e.timeStamp);
+      } else {
+        this.render();
       }
-      this.pushState();
     });
 
     $("rmx-voice-mute").addEventListener("click", () => {
@@ -285,18 +416,21 @@ export class RmxPanel {
 
     for (const btn of strip.querySelectorAll<HTMLButtonElement>("[data-roll-div]")) {
       btn.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
         const div = Number(btn.dataset.rollDiv) as RollDivision;
         this.rollPointerDown = true;
-        this.startRoll(div);
+        this.rollStartY = e.clientY;
+        this.rollBasePitch = this.state.xpadPitch;
+        this.startRoll(div, e.timeStamp);
       });
       btn.addEventListener("click", (e) => {
         // Keyboard Enter/Space activation on a division button triggers one roll burst
         if (e.detail === 0) {
           const div = Number(btn.dataset.rollDiv) as RollDivision;
           this.state.xpadRollDiv = div;
-          this.firePadHit(div >= 16);
-          this.pushState();
+          this.firePadHit(div >= 16, e.timeStamp);
+          this.pushState(e.timeStamp);
         }
       });
     }
@@ -304,10 +438,20 @@ export class RmxPanel {
     strip.addEventListener("pointermove", (e) => {
       if (!this.rollPointerDown) return;
       const div = divFromPoint(e.clientX);
+      let changed = false;
       if (div !== this.state.xpadRollDiv) {
         this.state.xpadRollDiv = div;
-        this.pushState();
+        changed = true;
       }
+      const dy = this.rollStartY - e.clientY;
+      if (Math.abs(dy) > 8) {
+        const nextPitch = Math.max(-1, Math.min(1, Math.round((this.rollBasePitch + dy / 75) * 20) / 20));
+        if (nextPitch !== this.state.xpadPitch) {
+          this.state.xpadPitch = nextPitch;
+          changed = true;
+        }
+      }
+      if (changed) this.pushState();
     });
 
     const endPointerRoll = () => {
@@ -363,18 +507,18 @@ export class RmxPanel {
     window.addEventListener("pointercancel", releaseLever);
   }
 
-  private startRoll(div: RollDivision): void {
+  private startRoll(div: RollDivision, eventTimeMs?: number): void {
     this.state.xpadRollDiv = div;
     this.state.xpadRolling = true;
     void this.cb.audio.ensureStarted().catch(() => {});
-    this.pushState();
+    this.pushState(eventTimeMs);
   }
 
   private stopRoll(): void {
     this.state.xpadRolling = false;
   }
 
-  private firePadHit(accent: boolean): void {
+  private firePadHit(accent: boolean, eventTimeMs?: number): void {
     const velocity = accent ? 1.0 : 0.85;
     const voice = this.state.xpadVoice;
     const pitch = this.state.xpadPitch;
@@ -385,7 +529,7 @@ export class RmxPanel {
       const targetStep = this.overdubStepCursor++ % 16;
       this.cb.onOverdubHit(voice, targetStep, accent, pitch);
     }
-    void this.cb.audio.triggerRmxPad(voice, pitch, velocity).then((quantizedStep) => {
+    void this.cb.audio.triggerRmxPad(voice, pitch, velocity, eventTimeMs).then((quantizedStep) => {
       if (overdub && liveStep >= 0) {
         const targetStep = quantizedStep >= 0 ? quantizedStep : liveStep;
         this.cb.onOverdubHit(voice, targetStep, accent, pitch);
@@ -393,8 +537,8 @@ export class RmxPanel {
     });
   }
 
-  private pushState(): void {
-    this.cb.audio.setRmxState(this.state);
+  private pushState(eventTimeMs?: number): void {
+    this.cb.audio.setRmxState(this.state, eventTimeMs);
     this.render();
   }
 
@@ -424,6 +568,16 @@ export class RmxPanel {
     const sceneSub = $<HTMLInputElement>("rmx-scene-sub");
     if (sceneSub.value !== String(s.sceneSub)) sceneSub.value = String(s.sceneSub);
     $("rmx-scene-sub-out").textContent = `${Math.round(s.sceneSub * 100)}%`;
+
+    const sceneSub2 = this.root.querySelector<HTMLInputElement>("#rmx-scene-sub2");
+    if (sceneSub2) {
+      const sub2Val = s.sceneSub2 ?? 0.5;
+      if (sceneSub2.value !== String(sub2Val)) sceneSub2.value = String(sub2Val);
+      const sub2Out = this.root.querySelector<HTMLElement>("#rmx-scene-sub2-out");
+      if (sub2Out) sub2Out.textContent = `${Math.round(sub2Val * 100)}%`;
+    }
+    const extBtn = this.root.querySelector<HTMLButtonElement>("#rmx-ext-in");
+    if (extBtn) extBtn.setAttribute("aria-pressed", String(Boolean(s.extInput)));
 
     // Isolator FX
     for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-iso-mode]")) {
@@ -490,5 +644,6 @@ export class RmxPanel {
     const lever = $("rmx-release-lever");
     lever.setAttribute("aria-pressed", String(s.releaseHeld));
     lever.textContent = s.releaseHeld ? "RELEASE FX ENGAGED (RELEASE TO DROP)" : "PULL RELEASE LEVER (HOLD)";
+    this.syncRotaryVisuals();
   }
 }

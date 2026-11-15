@@ -17,6 +17,7 @@ import {
 import { applyKitToSpec, DEFAULT_PRESET, KITS, PRESETS } from "./presets";
 import { setupPwa } from "./pwa";
 import {
+  BAR_IDS,
   BPM_MAX,
   BPM_MIN,
   cycleStep,
@@ -24,15 +25,25 @@ import {
   decodeHash,
   EMPTY_STEPS,
   encodeCode,
+  normalizeSteps,
   parsePatternInput,
   sanitize,
+  setStep,
+  setStepsForBar,
   specBytes,
   STEP_COUNT,
+  stepsForBar,
+  toggleAccent,
   toggleFlam,
+  type BarId,
   type PatternSpec,
+  type StepChar,
+  type VariationCode,
+  type VoiceSpec,
 } from "./spec";
 import { loadString, saveString } from "./storage";
 import { ClockPanel, type SourceKind } from "./ui/clock-panel";
+import { DjsPanel } from "./ui/djs-panel";
 import { Grid } from "./ui/grid";
 import { HowToExplainer } from "./ui/how-to";
 import { formatDb, Meter } from "./ui/meter";
@@ -75,17 +86,54 @@ function findMatchingPresetId(s: PatternSpec): string {
   return PRESETS.find((p) => encodeCode(p.spec()) === code)?.id ?? "";
 }
 
+function initialEditBar(s: PatternSpec): BarId {
+  if (s.variation === 1) return "b";
+  if (s.variation === 3) return "c";
+  if (s.variation === 4) return "d";
+  return "a";
+}
+
 let spec: PatternSpec = initialSpec();
 let activePresetId = findMatchingPresetId(spec);
 let activeKitId = PRESETS.find((p) => p.id === activePresetId)?.kitId ?? "";
 let activeGrooveId = "";
-let humanizeAmount = 0;
+let humanizeAmount = spec.humanize;
 let voiceFx: VoiceFxMap = defaultVoiceFxMap();
 let voiceFxLevel = 0.72;
 let selected: VoiceId = "kick";
 let flamMode = false;
+let editBank: BarId = initialEditBar(spec);
+let followBars = false;
+let mixerOpen = false;
 /** Step being heard (the playhead). */
 let playingStep = -1;
+let playingBar: BarId = "a";
+
+function syncFxFromSpec(s: PatternSpec): void {
+  humanizeAmount = s.humanize;
+  for (const v of VOICES) {
+    const sv = s.voices[v.id];
+    voiceFx[v.id] = {
+      echo: sv.echo_send > 0.05,
+      reverb: sv.reverb_send > 0.05,
+      filter: sv.filter_send > 0.05,
+    };
+  }
+  editBank = initialEditBar(s);
+}
+
+function syncFxIntoSpec(s: PatternSpec): void {
+  s.humanize = humanizeAmount;
+  for (const v of VOICES) {
+    const f = voiceFx[v.id];
+    const sv = s.voices[v.id];
+    sv.echo_send = f.echo ? 0.85 : 0;
+    sv.reverb_send = f.reverb ? 0.85 : 0;
+    sv.filter_send = f.filter ? 0.85 : 0;
+  }
+}
+
+syncFxFromSpec(spec);
 /** Step at the engine's render position, as posted by the audio runtime. */
 let renderedStep = -1;
 let playheadFrame = 0;
@@ -103,6 +151,7 @@ app.innerHTML = template({ single: SINGLE, bridge: bridgeOk, midi: midiOk, secur
 if (SINGLE) app.dataset.build = "single";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const themeSelect = $<HTMLSelectElement>("theme-select");
 const playBtn = $<HTMLButtonElement>("play");
 const bpmInput = $<HTMLInputElement>("bpm");
 const tapBtn = $<HTMLButtonElement>("tap");
@@ -121,10 +170,59 @@ const undoBtn = $<HTMLButtonElement>("undo");
 const gain = $<HTMLInputElement>("gain");
 const limiter = $<HTMLInputElement>("limiter");
 const voiceControls = $<HTMLDivElement>("voice-controls");
+const voiceExtra = $<HTMLDivElement>("voice-extra");
+const mixerDrawer = $<HTMLDivElement>("mixer-drawer");
+const lastStepSelect = $<HTMLSelectElement>("last-step");
+const autoFillSelect = $<HTMLSelectElement>("auto-fill-bars");
+const fillHoldBtn = $<HTMLButtonElement>("fill-hold");
 const shareLink = $<HTMLInputElement>("share-link");
 const shareCode = $<HTMLInputElement>("share-code");
 const importInput = $<HTMLInputElement>("import");
 const shareMsg = $<HTMLParagraphElement>("share-msg");
+
+// ---- hardware visual / color schemes ----
+
+type ThemeId = "default" | "tr-classic" | "tr-silver" | "tr-neon" | "pioneer" | "maschine";
+const THEME_IDS: readonly ThemeId[] = [
+  "default",
+  "tr-classic",
+  "tr-silver",
+  "tr-neon",
+  "pioneer",
+  "maschine",
+];
+const THEME_BG: Readonly<Record<ThemeId, string>> = {
+  default: "#0f1115",
+  "tr-classic": "#141311",
+  "tr-silver": "#cfd3da",
+  "tr-neon": "#07080c",
+  pioneer: "#0c0e13",
+  maschine: "#12151c",
+};
+
+function applyTheme(theme: ThemeId): void {
+  if (theme === "default") {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = theme;
+  }
+  app.dataset.theme = theme;
+  themeSelect.value = theme;
+  const metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = THEME_BG[theme];
+  const metaScheme = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+  if (metaScheme) metaScheme.content = theme === "tr-silver" ? "light" : "dark";
+}
+
+const savedTheme = loadString("theme") as ThemeId | null;
+applyTheme(savedTheme && THEME_IDS.includes(savedTheme) ? savedTheme : "default");
+themeSelect.addEventListener("change", () => {
+  const next = THEME_IDS.includes(themeSelect.value as ThemeId)
+    ? (themeSelect.value as ThemeId)
+    : "default";
+  applyTheme(next);
+  saveString("theme", next);
+});
 
 const audio = new AudioEngine({
   onState: (state, detail) => renderStatus(state, detail),
@@ -143,11 +241,99 @@ function toggleVoiceFx(voice: VoiceId, fx: VoiceFxKind): void {
   commit();
 }
 
+function editVoiceSteps(voice: VoiceId, fn: (steps: string) => string): void {
+  const v = spec.voices[voice];
+  setStepsForBar(v, editBank, fn(stepsForBar(v, editBank)));
+}
+
+function ensureBarsPopulated(upToBar: BarId): void {
+  for (const voice of VOICES) {
+    const sv = spec.voices[voice.id];
+    if (upToBar === "b" || upToBar === "c" || upToBar === "d") {
+      sv.steps_b ??= normalizeSteps(sv.steps);
+    }
+    if (upToBar === "c" || upToBar === "d") {
+      sv.steps_c ??= normalizeSteps(sv.steps);
+    }
+    if (upToBar === "d") {
+      sv.steps_d ??= normalizeSteps(sv.steps_b ?? sv.steps);
+    }
+  }
+}
+
+function singleBarVariation(bar: BarId): VariationCode {
+  return bar === "b" ? 1 : bar === "c" ? 3 : bar === "d" ? 4 : 0;
+}
+
+function selectBar(bar: BarId): void {
+  checkpoint("variation-bank");
+  ensureBarsPopulated(bar);
+  editBank = bar;
+  if (spec.variation === 5) {
+    // Keep 64-step A–D chain running while inspecting/editing any bar page
+  } else if (spec.variation === 2 && (bar === "a" || bar === "b")) {
+    // Keep 32-step A+B chain running while inspecting/editing Bar A or Bar B
+  } else {
+    spec.variation = singleBarVariation(bar);
+  }
+  commit();
+}
+
+function selectChainVariation(target: VariationCode): void {
+  checkpoint("variation-bank");
+  if (target === 5) {
+    ensureBarsPopulated("d");
+    spec.variation = spec.variation === 5 ? singleBarVariation(editBank) : 5;
+  } else if (target === 2) {
+    ensureBarsPopulated("b");
+    if (spec.variation === 2) {
+      spec.variation = singleBarVariation(editBank === "b" ? "b" : "a");
+    } else {
+      if (editBank === "c" || editBank === "d") editBank = "a";
+      spec.variation = 2;
+    }
+  } else {
+    spec.variation = target;
+    editBank = initialEditBar(spec);
+  }
+  commit();
+}
+
+function overdubStepIntoPattern(
+  voice: VoiceId,
+  stepIdx: number,
+  isAccent: boolean,
+  tuneOffset: number,
+): void {
+  checkpoint(`rmx-overdub-${voice}`);
+  const v = spec.voices[voice];
+  const targetBar: BarId =
+    playingStep >= 0 && (spec.variation === 2 || spec.variation === 5) ? playingBar : editBank;
+  ensureBarsPopulated(targetBar);
+  const chars = [...normalizeSteps(stepsForBar(v, targetBar))];
+  const index = Math.max(0, Math.min(STEP_COUNT - 1, stepIdx));
+  chars[index] = isAccent ? "X" : "x";
+  setStepsForBar(v, targetBar, chars.join(""));
+  if (Math.abs(tuneOffset) > 0.01) {
+    v.tune = Math.max(0, Math.min(1, Math.round((0.5 + tuneOffset * 0.45) * 100) / 100));
+  }
+  commit();
+}
+
 const grid = new Grid($("grid"), {
   onStep(voice, step) {
     checkpoint();
-    const v = spec.voices[voice];
-    v.steps = flamMode ? toggleFlam(v.steps, step) : cycleStep(v.steps, step);
+    editVoiceSteps(voice, (s) => (flamMode ? toggleFlam(s, step) : cycleStep(s, step)));
+    commit();
+  },
+  onPaintStep(voice, step, ch: StepChar) {
+    checkpoint("paint-steps");
+    editVoiceSteps(voice, (s) => setStep(s, step, ch));
+    commit();
+  },
+  onAccentStep(voice, step) {
+    checkpoint();
+    editVoiceSteps(voice, (s) => toggleAccent(s, step));
     commit();
   },
   onSelect(voice) {
@@ -155,10 +341,17 @@ const grid = new Grid($("grid"), {
     renderVoicePanel();
     renderGrid();
     renderGrooveAndFxControls();
+    renderMixerDrawer();
+    djs.render();
   },
   onMute(voice) {
     checkpoint();
     spec.voices[voice].mute = !spec.voices[voice].mute;
+    commit();
+  },
+  onSolo(voice) {
+    checkpoint();
+    spec.voices[voice].solo = !spec.voices[voice].solo;
     commit();
   },
   onToggleFx(voice, fx) {
@@ -175,6 +368,9 @@ const clock = new ClockPanel(
     tap: (ms) => tap(ms),
     onSourceChange: (source, previous) => onSourceChange(source, previous),
     getPatternBpm: () => spec.bpm,
+    onExternalTransport: (wantPlaying) => {
+      if (wantPlaying !== audio.playing) void togglePlay(true);
+    },
   },
   { bridge: bridgeOk, midi: midiOk },
 );
@@ -184,16 +380,7 @@ const rmx = new RmxPanel($("rmx-panel"), {
   getBpm: () => (clock.following && audio.lastStatus ? audio.lastStatus.tempo : spec.bpm),
   getStep: () => playingStep,
   onOverdubHit(voice, stepIdx, isAccent, tuneOffset) {
-    checkpoint(`rmx-overdub-${voice}`);
-    const v = spec.voices[voice];
-    const chars = [...v.steps];
-    const index = Math.max(0, Math.min(STEP_COUNT - 1, stepIdx));
-    chars[index] = isAccent ? "X" : "x";
-    v.steps = chars.join("");
-    if (Math.abs(tuneOffset) > 0.01) {
-      v.tune = Math.max(0, Math.min(1, Math.round((0.5 + tuneOffset * 0.45) * 100) / 100));
-    }
-    commit();
+    overdubStepIntoPattern(voice, stepIdx, isAccent, tuneOffset);
   },
   onToggleVoiceMute(voice) {
     checkpoint();
@@ -202,34 +389,183 @@ const rmx = new RmxPanel($("rmx-panel"), {
   },
   onClearVoice(voice) {
     checkpoint();
-    spec.voices[voice].steps = EMPTY_STEPS;
+    setStepsForBar(spec.voices[voice], editBank, EMPTY_STEPS);
     commit();
   },
   isVoiceMuted: (voice) => spec.voices[voice].mute,
 });
 
+const djs = new DjsPanel($("djs-panel"), {
+  audio,
+  getRmxState: () => rmx.current,
+  getSpec: () => spec,
+  getSelectedVoice: () => selected,
+  onSelectVoice(voice) {
+    selected = voice;
+    renderVoicePanel();
+    renderGrid();
+    renderGrooveAndFxControls();
+    renderMixerDrawer();
+    djs.render();
+  },
+  getEditBar: () => editBank,
+  getPlayingBar: () => playingBar,
+  getPlayingStep: () => playingStep,
+  onSelectBar: (bar) => selectBar(bar),
+  onSelectVariation: (v) => selectChainVariation(v),
+  onToggleStep(voice, step, accentOnly) {
+    checkpoint();
+    editVoiceSteps(voice, (s) =>
+      accentOnly ? toggleAccent(s, step) : flamMode ? toggleFlam(s, step) : cycleStep(s, step),
+    );
+    commit();
+  },
+  onOverdubStep(voice, stepIdx, accentHit, tuneOffset) {
+    overdubStepIntoPattern(voice, stepIdx, accentHit, tuneOffset);
+  },
+  onToggleMute(voice, soloInstead) {
+    checkpoint();
+    if (soloInstead) spec.voices[voice].solo = !spec.voices[voice].solo;
+    else spec.voices[voice].mute = !spec.voices[voice].mute;
+    commit();
+  },
+  onGroupMute(group) {
+    checkpoint(`djs-grp-${group}`);
+    if (group === "unmute_all") {
+      for (const v of VOICES) {
+        spec.voices[v.id].mute = false;
+        spec.voices[v.id].solo = false;
+      }
+    } else if (group === "solo_bd") {
+      const already =
+        spec.voices.kick.solo && VOICES.every((v) => v.id === "kick" || !spec.voices[v.id].solo);
+      for (const v of VOICES) spec.voices[v.id].solo = !already && v.id === "kick";
+    } else if (group === "solo_perc") {
+      const perc: VoiceId[] = ["snare", "clap", "rim", "low_tom", "mid_tom", "high_tom"];
+      const already = perc.every((id) => spec.voices[id].solo);
+      for (const v of VOICES) spec.voices[v.id].solo = !already && perc.includes(v.id);
+    } else if (group === "kick") {
+      spec.voices.kick.mute = !spec.voices.kick.mute;
+    } else if (group === "tops") {
+      const tops: VoiceId[] = ["closed_hat", "open_hat", "clap"];
+      const nextMute = !tops.every((id) => spec.voices[id].mute);
+      for (const id of tops) spec.voices[id].mute = nextMute;
+    } else if (group === "toms") {
+      const toms: VoiceId[] = ["low_tom", "mid_tom", "high_tom", "cowbell"];
+      const nextMute = !toms.every((id) => spec.voices[id].mute);
+      for (const id of toms) spec.voices[id].mute = nextMute;
+    }
+    commit();
+  },
+  onTriggerMacro(macro, eventTimeMs) {
+    switch (macro) {
+      case "bd_accent":
+        void audio.triggerRmxPad("kick", -0.15, 1.0, eventTimeMs);
+        break;
+      case "sd_flam":
+        void audio.triggerRmxPad("snare", 0, 0.72, eventTimeMs);
+        setTimeout(() => void audio.triggerRmxPad("snare", 0.05, 0.98), 26);
+        break;
+      case "cp_dub":
+        if (!voiceFx.clap.echo) {
+          checkpoint("djs-cp-echo");
+          voiceFx.clap.echo = true;
+          commit();
+        }
+        void audio.triggerVoice("clap", 0.96).catch(() => {});
+        break;
+      case "ride_toggle":
+        checkpoint("cymbal-mode");
+        spec.cymbal_mode ^= 1;
+        commit();
+        void audio.triggerVoice("open_hat", 0.92).catch(() => {});
+        break;
+      case "crash_toggle":
+        checkpoint("cymbal-mode");
+        spec.cymbal_mode ^= 2;
+        commit();
+        void audio.triggerVoice("cowbell", 0.95).catch(() => {});
+        break;
+    }
+  },
+  onTogglePlay: () => void togglePlay(),
+  onCueReset() {
+    audio.resync();
+    if (!audio.playing) {
+      playingStep = -1;
+      playingBar = editBank;
+      renderPlayhead();
+    }
+  },
+  onBeatSync() {
+    if (clock.following) {
+      clock.setSource("internal");
+    } else if (bridgeOk) {
+      clock.setSource("link");
+    } else {
+      audio.resync();
+    }
+  },
+  onNudge: (deltaMs) => clock.adjustNudge(deltaMs),
+  onTempoFader: (bpm) => setBpm(bpm, "djs-tempo"),
+  getClockReadout: () => ({
+    following: clock.following,
+    source: clock.source,
+    locked: $("clock").dataset.lock === "locked",
+    bpm: clock.following && audio.lastStatus ? audio.lastStatus.tempo : spec.bpm,
+    playing: audio.playing,
+  }),
+  onLoadScene(sceneSpec, sceneName) {
+    checkpoint(`djs-scene-${sceneName}`);
+    const next = sceneSpec;
+    next.render = { ...spec.render };
+    spec = next;
+    activePresetId = findMatchingPresetId(spec);
+    syncFxFromSpec(spec);
+    commit();
+    say(`Loaded ${sceneName}`);
+  },
+});
+
 const howTo = new HowToExplainer(app);
 
-// ---- surface mode (Step Sequencer vs RMX-1000 Station) ----
+// ---- surface mode (Step Sequencer vs DJS-1000 vs RMX-1000 vs MacBook Air 13" Booth Split) ----
 
-type SurfaceMode = "sequencer" | "rmx";
+type SurfaceMode = "sequencer" | "djs" | "rmx" | "booth";
 let surfaceMode: SurfaceMode = "sequencer";
+let boothLeftDeck: "sequencer" | "djs" = "sequencer";
 app.dataset.surface = surfaceMode;
+app.dataset.boothDeck = boothLeftDeck;
 
 function setSurfaceMode(mode: SurfaceMode): void {
   surfaceMode = mode;
   app.dataset.surface = mode;
-  const isRmx = mode === "rmx";
-  $("mode-seq").setAttribute("aria-pressed", String(!isRmx));
-  $("mode-rmx").setAttribute("aria-pressed", String(isRmx));
-  $("rmx-panel").hidden = !isRmx;
-  $("grid-panel").hidden = isRmx;
-  $("voice-panel").hidden = isRmx;
+  app.dataset.boothDeck = boothLeftDeck;
+  $("mode-seq").setAttribute("aria-pressed", String(mode === "sequencer"));
+  $("mode-djs").setAttribute("aria-pressed", String(mode === "djs"));
+  $("mode-rmx").setAttribute("aria-pressed", String(mode === "rmx"));
+  $("mode-booth").setAttribute("aria-pressed", String(mode === "booth"));
+  $("rmx-panel").hidden = mode !== "rmx" && mode !== "booth";
+  $("djs-panel").hidden = !(mode === "djs" || (mode === "booth" && boothLeftDeck === "djs"));
+  $("grid-panel").hidden = !(mode === "sequencer" || (mode === "booth" && boothLeftDeck === "sequencer"));
+  $("voice-panel").hidden = mode === "rmx";
+  if (mode !== "booth") $("share-panel").classList.remove("open-in-booth");
   howTo.setGuideMode(mode);
+  djs.render();
 }
 
 $("mode-seq").addEventListener("click", () => setSurfaceMode("sequencer"));
+$("mode-djs").addEventListener("click", () => setSurfaceMode("djs"));
 $("mode-rmx").addEventListener("click", () => setSurfaceMode("rmx"));
+$("mode-booth").addEventListener("click", () => setSurfaceMode("booth"));
+$("booth-swap-djs").addEventListener("click", () => {
+  boothLeftDeck = "djs";
+  setSurfaceMode("booth");
+});
+$("booth-swap-tr").addEventListener("click", () => {
+  boothLeftDeck = "sequencer";
+  setSurfaceMode("booth");
+});
 
 // ---- rendering ----
 
@@ -237,7 +573,120 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 const gainDb = (g: number) => (g > 0 ? 20 * Math.log10(g) : -Infinity);
 
 function renderGrid(): void {
-  grid.render(spec, selected, voiceFx);
+  grid.render(spec, selected, voiceFx, editBank);
+}
+
+function formatVoicePhys(voice: VoiceId, v: VoiceSpec): string {
+  const lvlDb = v.level > 0.001 ? `${(20 * Math.log10(v.level)).toFixed(1)} dB` : "−∞ dB";
+  switch (voice) {
+    case "kick":
+      return `${Math.round(36 + v.tune * 59)} Hz · ${Math.round(120 + v.decay * 860)} ms · ${lvlDb}`;
+    case "snare":
+      return `${Math.round(135 + v.tune * 130)} Hz · ${Math.round(80 + v.decay * 340)} ms · ${lvlDb}`;
+    case "low_tom":
+      return `${Math.round(68 + v.tune * 57)} Hz · ${Math.round(130 + v.decay * 490)} ms · ${lvlDb}`;
+    case "mid_tom":
+      return `${Math.round(105 + v.tune * 80)} Hz · ${Math.round(115 + v.decay * 440)} ms · ${lvlDb}`;
+    case "high_tom":
+      return `${Math.round(155 + v.tune * 120)} Hz · ${Math.round(100 + v.decay * 390)} ms · ${lvlDb}`;
+    case "rim":
+      return `${Math.round(420 + v.tune * 920)} Hz · 38 ms · ${lvlDb}`;
+    case "clap":
+      return `4-burst · ${Math.round(90 + v.decay * 370)} ms · ${lvlDb}`;
+    case "closed_hat":
+      return `${Math.round(320 + v.tune * 360)} Hz · ${Math.round(28 + v.decay * 87)} ms · ${lvlDb}`;
+    case "open_hat":
+      return `${(spec.cymbal_mode & 1) !== 0 ? "9O9 Ride" : "6-Osc Hat"} · ${Math.round(140 + v.decay * 680)} ms · ${lvlDb}`;
+    case "cowbell":
+      return `${(spec.cymbal_mode & 2) !== 0 ? "9O9 Crash" : `${Math.round(510 + v.tune * 85)} Hz`} · ${lvlDb}`;
+  }
+}
+
+function renderMixerDrawer(): void {
+  $("mixer-toggle").setAttribute("aria-pressed", String(mixerOpen));
+  mixerDrawer.hidden = !mixerOpen;
+  if (!mixerOpen) return;
+  if (!mixerDrawer.children.length) {
+    mixerDrawer.replaceChildren(
+      ...VOICES.map((voice) => {
+        const strip = document.createElement("div");
+        strip.className = "mixer-strip";
+        strip.dataset.mixerVoice = voice.id;
+        strip.innerHTML =
+          `<button type="button" class="mixer-sel" data-msel="${voice.id}">${voice.short}</button>` +
+          `<input type="range" class="mixer-fader" min="0" max="1" step="0.01" data-mlevel="${voice.id}" aria-label="${voice.name} mixer level" />` +
+          `<output class="mixer-out" data-mout="${voice.id}"></output>` +
+          `<div class="mixer-btns">` +
+          `<button type="button" class="solo" data-msolo="${voice.id}" aria-label="Solo ${voice.name}">S</button>` +
+          `<button type="button" class="mute" data-mmute="${voice.id}" aria-label="Mute ${voice.name}">M</button>` +
+          `</div>`;
+        strip.querySelector<HTMLButtonElement>("[data-msel]")!.addEventListener("click", () => {
+          selected = voice.id;
+          renderControls();
+        });
+        const fader = strip.querySelector<HTMLInputElement>("[data-mlevel]")!;
+        fader.addEventListener("input", () => {
+          checkpoint(`${voice.id}.level`);
+          spec.voices[voice.id].level = Number(fader.value);
+          commit();
+        });
+        strip.querySelector<HTMLButtonElement>("[data-msolo]")!.addEventListener("click", () => {
+          checkpoint();
+          spec.voices[voice.id].solo = !spec.voices[voice.id].solo;
+          commit();
+        });
+        strip.querySelector<HTMLButtonElement>("[data-mmute]")!.addEventListener("click", () => {
+          checkpoint();
+          spec.voices[voice.id].mute = !spec.voices[voice.id].mute;
+          commit();
+        });
+        return strip;
+      }),
+    );
+  }
+  for (const voice of VOICES) {
+    const v = spec.voices[voice.id];
+    const strip = mixerDrawer.querySelector<HTMLElement>(`[data-mixer-voice="${voice.id}"]`);
+    if (!strip) continue;
+    strip.classList.toggle("selected", voice.id === selected);
+    const fader = strip.querySelector<HTMLInputElement>("[data-mlevel]")!;
+    if (fader.value !== String(v.level)) fader.value = String(v.level);
+    strip.querySelector<HTMLElement>("[data-mout]")!.textContent = pct(v.level);
+    strip.querySelector<HTMLButtonElement>("[data-msolo]")!.setAttribute("aria-pressed", String(v.solo));
+    strip.querySelector<HTMLButtonElement>("[data-mmute]")!.setAttribute("aria-pressed", String(v.mute));
+  }
+}
+
+function renderVariationBar(): void {
+  const isChained = spec.variation === 2 || spec.variation === 5;
+  $("var-bank-a").setAttribute(
+    "aria-pressed",
+    String(spec.variation === 0 || (isChained && editBank === "a")),
+  );
+  $("var-bank-b").setAttribute(
+    "aria-pressed",
+    String(spec.variation === 1 || (isChained && editBank === "b")),
+  );
+  $("var-bank-c").setAttribute(
+    "aria-pressed",
+    String(spec.variation === 3 || (spec.variation === 5 && editBank === "c")),
+  );
+  $("var-bank-d").setAttribute(
+    "aria-pressed",
+    String(spec.variation === 4 || (spec.variation === 5 && editBank === "d")),
+  );
+  $("var-bank-ab").setAttribute("aria-pressed", String(spec.variation === 2));
+  $("var-bank-abcd").setAttribute("aria-pressed", String(spec.variation === 5));
+  $("var-follow").setAttribute("aria-pressed", String(followBars));
+  for (const bar of BAR_IDS) {
+    $(`var-bank-${bar}`).classList.toggle(
+      "chain-active",
+      isChained && playingBar === bar && playingStep >= 0,
+    );
+  }
+  lastStepSelect.value = String(spec.last_step);
+  autoFillSelect.value = String(spec.auto_fill_bars);
+  fillHoldBtn.setAttribute("aria-pressed", String(spec.fill));
 }
 
 function renderGrooveAndFxControls(): void {
@@ -332,13 +781,99 @@ function renderVoicePanel(): void {
   const mute = $("voice-mute");
   mute.setAttribute("aria-pressed", String(v.mute));
   mute.setAttribute("aria-label", `Mute ${info.name}`);
+
+  // Extra hardware controls & physical parameter telemetry (#voice-extra)
+  if (voiceExtra.dataset.voice !== selected) {
+    voiceExtra.dataset.voice = selected;
+    const nodes: HTMLElement[] = [];
+
+    const soloBtn = document.createElement("button");
+    soloBtn.type = "button";
+    soloBtn.id = "voice-solo";
+    soloBtn.className = "toggle small voice-solo";
+    soloBtn.textContent = "Solo";
+    soloBtn.addEventListener("click", () => {
+      checkpoint();
+      spec.voices[selected].solo = !spec.voices[selected].solo;
+      commit();
+    });
+    nodes.push(soloBtn);
+
+    if (selected === "kick") {
+      const wrap = document.createElement("label");
+      wrap.className = "knob extra-knob";
+      wrap.htmlFor = "vc-kick-attack";
+      wrap.innerHTML =
+        `<span class="knob-label">Attack <output id="vc-kick-attack-out"></output></span>` +
+        `<input id="vc-kick-attack" type="range" min="0" max="1" step="0.01" aria-label="Bass drum click attack" />`;
+      const atk = wrap.querySelector<HTMLInputElement>("input")!;
+      atk.addEventListener("input", () => {
+        checkpoint("kick.tone");
+        spec.voices.kick.tone = Number(atk.value);
+        commit();
+      });
+      nodes.push(wrap);
+    } else if (selected === "open_hat") {
+      const rideBtn = document.createElement("button");
+      rideBtn.type = "button";
+      rideBtn.id = "vc-oh-ride";
+      rideBtn.className = "toggle small";
+      rideBtn.addEventListener("click", () => {
+        checkpoint("cymbal-mode");
+        spec.cymbal_mode ^= 1;
+        commit();
+      });
+      nodes.push(rideBtn);
+    } else if (selected === "cowbell") {
+      const crashBtn = document.createElement("button");
+      crashBtn.type = "button";
+      crashBtn.id = "vc-cb-crash";
+      crashBtn.className = "toggle small";
+      crashBtn.addEventListener("click", () => {
+        checkpoint("cymbal-mode");
+        spec.cymbal_mode ^= 2;
+        commit();
+      });
+      nodes.push(crashBtn);
+    }
+
+    const phys = document.createElement("output");
+    phys.id = "voice-phys";
+    phys.className = "voice-phys";
+    nodes.push(phys);
+    voiceExtra.replaceChildren(...nodes);
+  }
+
+  const soloBtn = $<HTMLButtonElement>("voice-solo");
+  soloBtn.setAttribute("aria-pressed", String(v.solo));
+  soloBtn.setAttribute("aria-label", `Solo ${info.name}`);
+  if (selected === "kick") {
+    const atk = $<HTMLInputElement>("vc-kick-attack");
+    if (atk.value !== String(v.tone)) atk.value = String(v.tone);
+    $("vc-kick-attack-out").textContent = pct(v.tone);
+  } else if (selected === "open_hat") {
+    const isRide = (spec.cymbal_mode & 1) !== 0;
+    const rideBtn = $<HTMLButtonElement>("vc-oh-ride");
+    rideBtn.setAttribute("aria-pressed", String(isRide));
+    rideBtn.textContent = isRide ? "9O9 Ride" : "Open Hat";
+  } else if (selected === "cowbell") {
+    const isCrash = (spec.cymbal_mode & 2) !== 0;
+    const crashBtn = $<HTMLButtonElement>("vc-cb-crash");
+    crashBtn.setAttribute("aria-pressed", String(isCrash));
+    crashBtn.textContent = isCrash ? "9O9 Crash" : "8O8 Bell";
+  }
+  $("voice-phys").textContent = formatVoicePhys(selected, v);
 }
 
 function renderControls(): void {
   renderGrid();
   renderVoicePanel();
   renderGrooveAndFxControls();
+  renderVariationBar();
+  renderMixerDrawer();
   rmx.render();
+  djs.syncBaseBpm(spec.bpm);
+  djs.render();
   if (!clock.following && !bpmEditing) bpmInput.value = String(spec.bpm);
   shuffle.value = String(spec.shuffle);
   accent.value = String(spec.accent);
@@ -377,25 +912,59 @@ function followPlayhead(): void {
   playheadFrame = 0;
   if (!audio.playing || renderedStep < 0) {
     playingStep = -1;
+    playingBar = editBank;
     renderPlayhead();
     return;
   }
+  const loopLen = Math.max(1, spec.last_step || STEP_COUNT);
   const beat = audio.beatHeardAt(performance.now());
-  const step =
-    beat === null ? renderedStep : beat < 0 ? -1 : Math.floor(beat * STEPS_PER_BEAT) % STEP_COUNT;
-  if (step !== playingStep) {
+  let step: number;
+  let bar: BarId = initialEditBar(spec);
+  if (beat === null) {
+    step = renderedStep % loopLen;
+  } else if (beat < 0) {
+    step = -1;
+  } else {
+    const totalSteps = Math.floor(beat * STEPS_PER_BEAT);
+    step = totalSteps % loopLen;
+    const barCount = Math.floor(totalSteps / loopLen);
+    if (spec.variation === 5) {
+      bar = BAR_IDS[barCount % 4]!;
+    } else if (spec.variation === 2) {
+      bar = barCount % 2 === 1 ? "b" : "a";
+    }
+  }
+  if (step !== playingStep || bar !== playingBar) {
     playingStep = step;
+    playingBar = bar;
+    if (followBars && (spec.variation === 2 || spec.variation === 5) && step >= 0 && editBank !== bar) {
+      editBank = bar;
+      renderGrid();
+      renderVariationBar();
+    }
     renderPlayhead();
   }
   playheadFrame = requestAnimationFrame(followPlayhead);
 }
 
 function renderPlayhead(): void {
-  grid.setPlayhead(playingStep);
+  const isChained = spec.variation === 2 || spec.variation === 5;
+  const gridHead = !isChained || playingBar === editBank ? playingStep : -1;
+  grid.setPlayhead(gridHead);
   if (app.dataset.playingStep !== String(playingStep)) app.dataset.playingStep = String(playingStep);
+  if (app.dataset.playingBar !== playingBar) app.dataset.playingBar = playingBar;
   const playing = audio.playing;
   playBtn.textContent = playing ? "Stop" : "Play";
   playBtn.setAttribute("aria-pressed", String(playing));
+  if (audio.armed) playBtn.dataset.armed = "true";
+  else delete playBtn.dataset.armed;
+  for (const bar of BAR_IDS) {
+    $(`var-bank-${bar}`).classList.toggle(
+      "chain-active",
+      isChained && playingBar === bar && playingStep >= 0,
+    );
+  }
+  if (!($("djs-panel").hidden)) djs.render();
 }
 
 const MODE_LABEL: Record<EngineMode, string> = {
@@ -429,15 +998,19 @@ function onEngineStatus(status: EngineStatus): void {
   meter.set(status.peak);
   clock.onStatus(status);
   if (clock.following) bpmInput.value = status.tempo.toFixed(2);
+  if (audio.armed) playBtn.dataset.armed = "true";
+  else delete playBtn.dataset.armed;
+  if (!$("djs-panel").hidden) djs.render();
 }
 
 /** Apply a change everywhere: DOM, audio engine, share fields, URL, saved copy. */
 function commit(): void {
+  syncFxIntoSpec(spec);
   spec = sanitize(spec);
   renderControls();
   audio.setPattern(specBytes(spec));
   audio.setKit(activeKitId, spec);
-  audio.setVoiceFxAndHumanize(voiceFx, humanizeAmount, voiceFxLevel);
+  audio.setVoiceFxLevel(voiceFxLevel);
   shareCode.value = encodeCode(spec);
   scheduleUrlWrite();
 }
@@ -493,11 +1066,13 @@ function restoreSnapshot(raw: string): void {
     activePresetId = parsed.presetId ?? "";
     activeKitId = parsed.kitId ?? "";
     activeGrooveId = parsed.grooveId ?? "";
-    humanizeAmount = typeof parsed.humanize === "number" ? parsed.humanize : 0;
+    humanizeAmount = typeof parsed.humanize === "number" ? parsed.humanize : spec.humanize;
     voiceFx = parsed.voiceFx ? cloneVoiceFxMap(parsed.voiceFx) : defaultVoiceFxMap();
     voiceFxLevel = typeof parsed.voiceFxLevel === "number" ? parsed.voiceFxLevel : 0.72;
+    editBank = initialEditBar(spec);
   } else {
     spec = sanitize(parsed);
+    syncFxFromSpec(spec);
   }
 }
 
@@ -534,7 +1109,7 @@ function redo(): void {
 
 // ---- transport ----
 
-async function togglePlay(): Promise<void> {
+async function togglePlay(fromExternal = false): Promise<void> {
   if (audio.playing) {
     audio.stop();
   } else {
@@ -544,6 +1119,7 @@ async function togglePlay(): Promise<void> {
       /* the status line shows the failure */
     }
   }
+  if (!fromExternal) clock.notifyTransport(audio.playing);
   renderPlayhead();
 }
 
@@ -651,25 +1227,86 @@ bindUnit(vfxLevelInput, "vfx-level", (v) => {
 function triggerHumanizeAction(): void {
   checkpoint("var-humanize");
   if (humanizeAmount < 0.25) humanizeAmount = 0.35;
-  spec = humanizePattern(spec, "all", Math.max(0.45, humanizeAmount));
+  spec = humanizePattern(spec, "all", Math.max(0.45, humanizeAmount), editBank);
   commit();
 }
 
 function triggerMutateAction(): void {
   checkpoint("var-mutate");
-  spec = mutatePattern(spec, "all", 0.55);
+  spec = mutatePattern(spec, "all", 0.55, editBank);
   commit();
 }
 
 function triggerAutoFillAction(): void {
   checkpoint("var-fill");
-  spec = applyAutoFill(spec);
+  spec = applyAutoFill(spec, editBank);
   commit();
 }
 
 $("var-humanize").addEventListener("click", triggerHumanizeAction);
 $("var-mutate").addEventListener("click", triggerMutateAction);
 $("var-fill").addEventListener("click", triggerAutoFillAction);
+
+// TR-8S A/B/C/D & 32/64-Step Variations, Polymetric Last Step, Momentary Fill & 10-Ch Mixer
+$("var-bank-a").addEventListener("click", () => selectBar("a"));
+$("var-bank-b").addEventListener("click", () => selectBar("b"));
+$("var-bank-c").addEventListener("click", () => selectBar("c"));
+$("var-bank-d").addEventListener("click", () => selectBar("d"));
+$("var-bank-ab").addEventListener("click", () => selectChainVariation(2));
+$("var-bank-abcd").addEventListener("click", () => selectChainVariation(5));
+$("var-copy-ab").addEventListener("click", () => {
+  checkpoint("copy-bar");
+  const nextBar: BarId =
+    editBank === "a" ? "b" : editBank === "b" ? "c" : editBank === "c" ? "d" : "a";
+  ensureBarsPopulated(nextBar);
+  for (const voice of VOICES) {
+    const sv = spec.voices[voice.id];
+    setStepsForBar(sv, nextBar, normalizeSteps(stepsForBar(sv, editBank)));
+  }
+  editBank = nextBar;
+  if (spec.variation === 2) {
+    if (nextBar === "c" || nextBar === "d") spec.variation = 5;
+  } else if (spec.variation !== 5) {
+    spec.variation = singleBarVariation(nextBar);
+  }
+  commit();
+});
+$("var-follow").addEventListener("click", () => {
+  followBars = !followBars;
+  renderVariationBar();
+});
+
+lastStepSelect.addEventListener("change", () => {
+  checkpoint("last-step");
+  spec.last_step = Math.max(1, Math.min(STEP_COUNT, Number(lastStepSelect.value) || STEP_COUNT));
+  commit();
+});
+
+autoFillSelect.addEventListener("change", () => {
+  checkpoint("auto-fill-bars");
+  spec.auto_fill_bars = Number(autoFillSelect.value) || 0;
+  commit();
+});
+
+const setFillHold = (held: boolean) => {
+  if (spec.fill === held) return;
+  spec.fill = held;
+  fillHoldBtn.setAttribute("aria-pressed", String(held));
+  audio.setPattern(specBytes(spec));
+};
+fillHoldBtn.addEventListener("pointerdown", (e) => {
+  if (e.button === 0) {
+    e.preventDefault();
+    setFillHold(true);
+  }
+});
+window.addEventListener("pointerup", () => setFillHold(false));
+window.addEventListener("pointercancel", () => setFillHold(false));
+
+$("mixer-toggle").addEventListener("click", () => {
+  mixerOpen = !mixerOpen;
+  renderMixerDrawer();
+});
 
 $("vfx-echo").addEventListener("click", () => toggleVoiceFx(selected, "echo"));
 $("vfx-reverb").addEventListener("click", () => toggleVoiceFx(selected, "reverb"));
@@ -706,6 +1343,7 @@ presetSelect.addEventListener("change", () => {
   const next = preset.spec();
   next.render = { ...spec.render }; // the booth's master settings stay
   spec = next;
+  editBank = initialEditBar(spec);
   activePresetId = preset.id;
   if (preset.kitId) activeKitId = preset.kitId;
   commit();
@@ -725,7 +1363,10 @@ kitSelect.addEventListener("change", () => {
 
 $("clear").addEventListener("click", () => {
   checkpoint();
-  for (const v of VOICES) spec.voices[v.id].steps = EMPTY_STEPS;
+  ensureBarsPopulated(editBank);
+  for (const v of VOICES) {
+    setStepsForBar(spec.voices[v.id], editBank, EMPTY_STEPS);
+  }
   commit();
 });
 
@@ -744,8 +1385,11 @@ function say(text: string): void {
 async function copyField(field: HTMLInputElement, what: string): Promise<void> {
   const text = field.value;
   try {
-    if (!navigator.clipboard) throw new Error("no clipboard");
-    await navigator.clipboard.writeText(text);
+    if (!navigator.clipboard || window.origin === "null") throw new Error("no clipboard");
+    await Promise.race([
+      navigator.clipboard.writeText(text),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("clipboard timeout")), 250)),
+    ]);
     say(`${what} copied to the clipboard.`);
     return;
   } catch {
@@ -763,6 +1407,9 @@ async function copyField(field: HTMLInputElement, what: string): Promise<void> {
 }
 
 $("share").addEventListener("click", () => {
+  if (surfaceMode === "booth") {
+    $("share-panel").classList.toggle("open-in-booth");
+  }
   $("share-panel").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   writeUrl();
   void (SINGLE ? copyField(shareCode, "Pattern code") : copyField(shareLink, "Link"));
@@ -782,6 +1429,7 @@ function importText(text: string): boolean {
   }
   checkpoint();
   spec = next;
+  syncFxFromSpec(spec);
   commit();
   importInput.value = "";
   say("Pattern loaded.");
@@ -803,6 +1451,7 @@ if (!SINGLE) {
     if (next && encodeCode(next) !== encodeCode(spec)) {
       checkpoint();
       spec = next;
+      syncFxFromSpec(spec);
       commit();
     }
   });
@@ -867,6 +1516,7 @@ function applyPresetByIndex(idx: number): void {
   const next = preset.spec();
   next.render = { ...spec.render };
   spec = next;
+  editBank = initialEditBar(spec);
   activePresetId = preset.id;
   if (preset.kitId) activeKitId = preset.kitId;
   commit();
@@ -941,10 +1591,15 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.shiftKey) {
       selected = vInfo.id;
-      rmx.triggerVoicePad(vInfo.id, true);
+      if (surfaceMode === "rmx") {
+        rmx.triggerVoicePad(vInfo.id, true, e.timeStamp);
+      } else {
+        void audio.triggerVoice(vInfo.id, 0.95).catch(() => {});
+      }
       renderVoicePanel();
       renderGrid();
       renderGrooveAndFxControls();
+      renderMixerDrawer();
       howTo.notifyKeyDown(e.code, `Shift+${vIdx === 9 ? 0 : vIdx + 1} → Trigger ${vInfo.short}`);
       return;
     }
@@ -953,12 +1608,13 @@ window.addEventListener("keydown", (e) => {
     renderVoicePanel();
     renderGrid();
     renderGrooveAndFxControls();
+    renderMixerDrawer();
     if (surfaceMode === "rmx") {
       if (vIdx < 4) {
-        rmx.triggerPadSlot(vIdx);
+        rmx.triggerPadSlot(vIdx, e.timeStamp);
       } else {
         const div = RMX_ROLL_DIVS[vIdx - 4] ?? 8;
-        rmx.holdRoll(div);
+        rmx.holdRoll(div, e.timeStamp);
       }
     }
     howTo.notifyKeyDown(e.code, `${vIdx === 9 ? 0 : vIdx + 1} → Select ${vInfo.short} (${vInfo.name})`);
@@ -1023,8 +1679,9 @@ window.addEventListener("keydown", (e) => {
   if (stepIdx >= 0 && !e.repeat) {
     e.preventDefault();
     checkpoint();
-    const v = spec.voices[selected];
-    v.steps = e.shiftKey || flamMode ? toggleFlam(v.steps, stepIdx) : cycleStep(v.steps, stepIdx);
+    editVoiceSteps(selected, (s) =>
+      e.shiftKey || flamMode ? toggleFlam(s, stepIdx) : cycleStep(s, stepIdx),
+    );
     const rIdx = Math.max(
       0,
       VOICES.findIndex((item) => item.id === selected),
@@ -1058,15 +1715,29 @@ window.addEventListener("keydown", (e) => {
     case "Backquote":
       if (!e.repeat) {
         e.preventDefault();
-        setSurfaceMode(surfaceMode === "rmx" ? "sequencer" : "rmx");
-        howTo.notifyKeyDown(e.code, `Surface → ${surfaceMode === "rmx" ? "RMX-1000" : "Step Sequencer"}`);
+        if (e.shiftKey) {
+          setSurfaceMode(surfaceMode === "booth" ? "sequencer" : "booth");
+        } else {
+          const nextMode: SurfaceMode =
+            surfaceMode === "sequencer" ? "djs" : surfaceMode === "djs" ? "rmx" : "sequencer";
+          setSurfaceMode(nextMode);
+        }
+        const label =
+          surfaceMode === "booth"
+            ? "Booth Split"
+            : surfaceMode === "djs"
+              ? "DJS-1000 Deck"
+              : surfaceMode === "rmx"
+                ? "RMX-1000"
+                : "Step Sequencer";
+        howTo.notifyKeyDown(e.code, `Surface → ${label}`);
       }
       break;
     case "KeyQ":
       if (!e.repeat) {
         e.preventDefault();
         if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(0);
+          rmx.triggerPadSlot(0, e.timeStamp);
           howTo.notifyKeyDown(e.code, "Q → X-Pad Slot 1");
         } else if (e.shiftKey) {
           const on = triggerGroupEcho("snare_clap");
@@ -1082,7 +1753,7 @@ window.addEventListener("keydown", (e) => {
       if (!e.repeat) {
         e.preventDefault();
         if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(1);
+          rmx.triggerPadSlot(1, e.timeStamp);
           howTo.notifyKeyDown(e.code, "W → X-Pad Slot 2");
         } else if (e.shiftKey) {
           const on = triggerGroupEcho("hats");
@@ -1098,7 +1769,7 @@ window.addEventListener("keydown", (e) => {
       if (!e.repeat) {
         e.preventDefault();
         if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(2);
+          rmx.triggerPadSlot(2, e.timeStamp);
           howTo.notifyKeyDown(e.code, "E → X-Pad Slot 3");
         } else if (e.shiftKey) {
           const on = triggerGroupEcho("toms");
@@ -1114,7 +1785,7 @@ window.addEventListener("keydown", (e) => {
       if (!e.repeat) {
         e.preventDefault();
         if (surfaceMode === "rmx" && e.shiftKey) {
-          rmx.triggerPadSlot(3);
+          rmx.triggerPadSlot(3, e.timeStamp);
           howTo.notifyKeyDown(e.code, "Shift+R → X-Pad Slot 4");
         } else {
           rmx.setReleaseLever(true);
@@ -1178,11 +1849,14 @@ window.addEventListener("keydown", (e) => {
       if (!e.repeat) {
         e.preventDefault();
         checkpoint();
+        ensureBarsPopulated(editBank);
         if (e.shiftKey) {
-          for (const v of VOICES) spec.voices[v.id].steps = EMPTY_STEPS;
+          for (const v of VOICES) {
+            setStepsForBar(spec.voices[v.id], editBank, EMPTY_STEPS);
+          }
           howTo.notifyKeyDown(e.code, "Shift+Delete → Clear All Voices");
         } else {
-          spec.voices[selected].steps = EMPTY_STEPS;
+          setStepsForBar(spec.voices[selected], editBank, EMPTY_STEPS);
           howTo.notifyKeyDown(e.code, `Delete → Clear ${selected.toUpperCase()}`);
         }
         commit();

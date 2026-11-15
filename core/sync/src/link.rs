@@ -8,9 +8,11 @@
 //! whenever the number of peers changes. Sessions faster than the
 //! follower accepts are reported at half or quarter tempo.
 //!
-//! This peer only listens. It never commits a session state, so it cannot
-//! change the session's tempo or beat grid; joining adopts whatever the
-//! session already plays. Start/stop sync stays disabled.
+//! By default this peer only listens and leaves start/stop sync disabled,
+//! so joining adopts whatever the session already plays without altering
+//! other peers. Explicit [`SourceCommand`](crate::net::SourceCommand)
+//! messages allow the user to commit a tempo change or opt in to Ableton
+//! Link start/stop synchronization.
 //!
 //! Link runs on its own clock (a microsecond reading of the host's
 //! monotonic clock). Every poll reads that clock back to back with
@@ -29,7 +31,7 @@ use rusty_link::{AblLink, SessionState};
 
 use crate::follower::{FollowerClock, Phase, Precision};
 use crate::host_time;
-use crate::net::{SourceContext, SourceEvent, SourceHandle};
+use crate::net::{SourceCommand, SourceContext, SourceEvent, SourceHandle};
 
 /// The Link quantum player5 uses: one 4-beat bar, so Link's shared phase
 /// is the position in the bar ([`Phase::Bar`]).
@@ -121,6 +123,8 @@ fn run(ctx: &SourceContext, initial_bpm: f64, interval: Duration) {
     // was ever announced (then the return to full tempo is, too).
     let mut divisor: Option<u32> = None;
     let mut divisor_announced = false;
+    let mut start_stop_sync = false;
+    let mut last_playing: Option<bool> = None;
 
     let _ = ctx.send(SourceEvent::Status {
         warning: false,
@@ -128,8 +132,43 @@ fn run(ctx: &SourceContext, initial_bpm: f64, interval: Duration) {
     });
 
     while !ctx.should_stop() {
-        // Following a particular device means nothing in a Link session.
-        while ctx.commands.try_recv().is_ok() {}
+        while let Ok(cmd) = ctx.commands.try_recv() {
+            match cmd {
+                // Following a particular device means nothing in a Link session.
+                SourceCommand::Follow(_) => {}
+                SourceCommand::SetTempo(bpm) => {
+                    if bpm.is_finite() {
+                        let clamped = bpm.clamp(MIN_BPM, MAX_BPM);
+                        link.capture_app_session_state(&mut state);
+                        state.set_tempo(clamped, link.clock_micros());
+                        link.commit_app_session_state(&state);
+                    }
+                }
+                SourceCommand::SetStartStopSync(enabled) => {
+                    start_stop_sync = enabled;
+                    link.enable_start_stop_sync(enabled);
+                    if enabled {
+                        link.capture_app_session_state(&mut state);
+                        last_playing = Some(state.is_playing());
+                    } else {
+                        last_playing = None;
+                    }
+                    let state_str = if enabled { "enabled" } else { "disabled" };
+                    let _ = ctx.send(SourceEvent::Status {
+                        warning: false,
+                        message: format!("Ableton Link: start/stop sync {state_str}"),
+                    });
+                }
+                SourceCommand::SetPlaying(playing) => {
+                    if start_stop_sync {
+                        link.capture_app_session_state(&mut state);
+                        state.set_is_playing(playing, link.clock_micros());
+                        link.commit_app_session_state(&state);
+                        last_playing = Some(playing);
+                    }
+                }
+            }
+        }
 
         let n = link.num_peers();
         if peers != Some(n) {
@@ -144,6 +183,15 @@ fn run(ctx: &SourceContext, initial_bpm: f64, interval: Duration) {
         }
 
         link.capture_app_session_state(&mut state);
+        if start_stop_sync {
+            let playing = state.is_playing();
+            if let Some(prev) = last_playing {
+                if prev != playing && !ctx.send(SourceEvent::Transport { playing }) {
+                    break;
+                }
+            }
+            last_playing = Some(playing);
+        }
         let now = sample_clocks(host_time::now_ns, || link.clock_micros());
         let session_bpm = state.tempo();
         if let Some(report) = follow(session_bpm, |q| state.beat_at_time(now.link_us, q)) {
@@ -353,6 +401,7 @@ mod tests {
         last: Option<Obs>,
         observations: usize,
         statuses: Vec<String>,
+        transports: Vec<bool>,
     }
 
     impl Seen {
@@ -390,6 +439,9 @@ mod tests {
                         self.max_peers = self.max_peers.max(n);
                     }
                     self.statuses.push(message);
+                }
+                SourceEvent::Transport { playing } => {
+                    self.transports.push(playing);
                 }
                 SourceEvent::Devices(_) => panic!("Link reports no devices"),
             }

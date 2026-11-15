@@ -255,18 +255,63 @@ impl Track {
     }
 }
 
-/// One bar of sixteenths for every voice, plus the pattern-wide feel
-/// controls. Tempo is not part of the pattern; it belongs to the clock.
+/// Which bar bank plays (`A..D`, 32-step `A -> B`, or 64-step `A -> B -> C -> D`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum VariationMode {
+    /// Play Bar A only (default 16-step loop).
+    #[default]
+    A = 0,
+    /// Play Bar B only.
+    B = 1,
+    /// Alternate Bar A and Bar B across consecutive bars (32-step loop).
+    AB = 2,
+    /// Play Bar C only.
+    C = 3,
+    /// Play Bar D only.
+    D = 4,
+    /// Chain Bars A -> B -> C -> D across 4 consecutive bars (64-step loop).
+    ABCD = 5,
+}
+
+/// One bar of sixteenths for every voice (plus optional Bars B/C/D and Fill banks),
+/// together with pattern-wide feel controls. Tempo belongs to the clock.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pattern {
-    /// One track per [`VoiceId`], indexed by [`VoiceId::index`].
+    /// Primary Bar A tracks, indexed by [`VoiceId::index`].
     pub tracks: [Track; VoiceId::COUNT],
+    /// Secondary Bar B tracks for 32-step `A+B` or 64-step `A-D` chaining.
+    pub tracks_b: [Track; VoiceId::COUNT],
+    /// Whether `tracks_b` carries an explicit B variation.
+    pub has_b: bool,
+    /// Bar C tracks for 64-step `A-D` chaining.
+    pub tracks_c: [Track; VoiceId::COUNT],
+    /// Whether `tracks_c` carries an explicit C variation.
+    pub has_c: bool,
+    /// Bar D tracks for 64-step `A-D` chaining.
+    pub tracks_d: [Track; VoiceId::COUNT],
+    /// Whether `tracks_d` carries an explicit D variation.
+    pub has_d: bool,
+    /// Optional explicit Fill bar tracks.
+    pub tracks_fill: [Track; VoiceId::COUNT],
+    /// Whether `tracks_fill` carries an explicit Fill pattern.
+    pub has_fill: bool,
     /// `0..=1`. Delays every off-beat sixteenth by up to a third of a step.
     pub shuffle: f32,
     /// `0..=1`. How much louder accented steps are than plain ones.
     pub accent: f32,
     /// `0..=1`. Flam spacing, mapped onto [`FLAM_SPACING_RANGE_S`].
     pub flam: f32,
+    /// `0..=1`. Non-destructive organic micro-timing and velocity humanize.
+    pub humanize: f32,
+    /// Active loop length in steps (`1..=16`, default `16`).
+    pub last_step: u8,
+    /// Bar bank playback mode (`A`, `B`, or `AB`).
+    pub variation: VariationMode,
+    /// Momentary non-destructive `[FILL]` performance hold.
+    pub fill_active: bool,
+    /// Automatic turnaround fill interval in bars (`0` = off, `2`, `4`, `8`).
+    pub auto_fill_bars: u8,
 }
 
 impl Default for Pattern {
@@ -279,15 +324,35 @@ impl Pattern {
     /// All steps off, no shuffle, accent and flam amounts at half.
     #[must_use]
     pub const fn empty() -> Self {
+        let empty_tracks = [Track {
+            steps: [Step::OFF; STEP_COUNT],
+            mute: false,
+        }; VoiceId::COUNT];
         Self {
-            tracks: [Track {
-                steps: [Step::OFF; STEP_COUNT],
-                mute: false,
-            }; VoiceId::COUNT],
+            tracks: empty_tracks,
+            tracks_b: empty_tracks,
+            has_b: false,
+            tracks_c: empty_tracks,
+            has_c: false,
+            tracks_d: empty_tracks,
+            has_d: false,
+            tracks_fill: empty_tracks,
+            has_fill: false,
             shuffle: 0.0,
             accent: 0.5,
             flam: 0.5,
+            humanize: 0.0,
+            last_step: STEP_COUNT as u8,
+            variation: VariationMode::A,
+            fill_active: false,
+            auto_fill_bars: 0,
         }
+    }
+
+    /// Effective loop length in steps (`1..=16`).
+    #[must_use]
+    pub fn effective_step_count(&self) -> usize {
+        usize::from(self.last_step.clamp(1, STEP_COUNT as u8))
     }
 
     /// Flam spacing in seconds for this pattern's `flam` amount.

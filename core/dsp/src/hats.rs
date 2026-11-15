@@ -46,13 +46,14 @@
 //! [`OpenHat`]'s [`Voice::choke`] whenever the closed hat triggers; the open
 //! hat then fades out over about 5 ms.
 
-use crate::blocks::{Square, Svf};
+use crate::blocks::{Noise, Square, Svf};
 use crate::math;
 use crate::voice::Voice;
 use crate::VoiceParams;
 
 /// Frequencies (Hz) of the six square oscillators at `tune = 0.5`.
 pub const METAL_FREQS_HZ: [f32; 6] = [205.3, 304.4, 369.6, 522.7, 540.0, 800.0];
+const RIDE_FREQS_HZ: [f32; 6] = [245.0, 368.0, 512.0, 685.0, 814.0, 1120.0];
 const OSC_COUNT_INV: f32 = 1.0 / 6.0;
 
 /// Tune ratio at `tune = 0`; `tune = 1` gives 1.25, `tune = 0.5` gives 1.
@@ -141,6 +142,7 @@ struct HatCore {
     shape: Shape,
     sample_rate: f32,
     params: VoiceParams,
+    ride_mode: bool,
 
     // Derived per sample rate.
     attack_coef: f32,
@@ -149,16 +151,19 @@ struct HatCore {
 
     // Derived per trigger.
     env_coef: f32,
+    bell_coef: f32,
 
     // State.
     active: bool,
     oscs: [Square; 6],
+    ride_noise: Noise,
     band: Svf,
     band_k: f32,
     highpass: [Svf; 2],
     lowpass: Svf,
     /// Envelope target: jumps to the velocity on trigger, then decays.
     env: f32,
+    bell_env: f32,
     /// Smoothed VCA gain following `env`.
     gain: f32,
     /// `params.level`, smoothed while the voice sounds.
@@ -171,17 +176,21 @@ impl HatCore {
             shape,
             sample_rate,
             params: VoiceParams::default(),
+            ride_mode: false,
             attack_coef: 1.0,
             choke_coef: 0.0,
             level_coef: 0.0,
             env_coef: 0.0,
+            bell_coef: 0.0,
             active: false,
             oscs: Default::default(),
+            ride_noise: Noise::new(0x51C3_A72D),
             band: Svf::default(),
             band_k: 1.0,
             highpass: [Svf::default(), Svf::default()],
             lowpass: Svf::default(),
             env: 0.0,
+            bell_env: 0.0,
             gain: 0.0,
             level_now: VoiceParams::default().level,
         };
@@ -215,6 +224,7 @@ impl HatCore {
     fn reset_state(&mut self) {
         self.active = false;
         self.env = 0.0;
+        self.bell_env = 0.0;
         self.gain = 0.0;
         self.level_now = self.params.level;
         self.band.reset();
@@ -264,6 +274,25 @@ impl HatCore {
         }
         let sr = self.sample_rate;
         let ratio = self.tune_ratio();
+        if self.ride_mode {
+            for (osc, &hz) in self.oscs.iter_mut().zip(&RIDE_FREQS_HZ) {
+                osc.set_frequency(hz * ratio, sr);
+            }
+            let ride_center = 3_900.0 + 3_400.0 * self.params.tone;
+            self.band.set(ride_center, 1.95, sr);
+            self.band_k = self.band.k();
+            let hp_hz = 2_800.0 + 1_800.0 * self.params.tone;
+            for (hp, &q) in self.highpass.iter_mut().zip(&HIGHPASS_Q) {
+                hp.set(hp_hz, q, sr);
+            }
+            let ride_t60 = 0.65 + 2.35 * self.params.decay;
+            self.env_coef = math::decay_coefficient(ride_t60, sr);
+            self.bell_coef = math::decay_coefficient(0.16, sr);
+            self.env = velocity;
+            self.bell_env = velocity;
+            self.active = true;
+            return;
+        }
         for (osc, &hz) in self.oscs.iter_mut().zip(&METAL_FREQS_HZ) {
             osc.set_frequency(hz * ratio, sr);
         }
@@ -284,7 +313,7 @@ impl HatCore {
     }
 
     fn choke(&mut self) {
-        if self.active {
+        if self.active && !self.ride_mode {
             self.env_coef = self.choke_coef;
         }
     }
@@ -299,7 +328,19 @@ impl HatCore {
         for osc in &mut self.oscs {
             metal += osc.tick();
         }
-        let band = self.band.process(metal * OSC_COUNT_INV).band * self.band_k;
+        let src = if self.ride_mode {
+            let shimmer = self.ride_noise.tick() * 0.22;
+            metal * OSC_COUNT_INV + shimmer * (0.35 + 0.65 * self.bell_env)
+        } else {
+            metal * OSC_COUNT_INV
+        };
+        let band_out = self.band.process(src);
+        let band = if self.ride_mode {
+            self.bell_env *= self.bell_coef;
+            band_out.band * self.band_k * (0.72 + 0.55 * self.bell_env)
+        } else {
+            band_out.band * self.band_k
+        };
 
         self.gain += self.attack_coef * (self.env - self.gain);
         self.env *= self.env_coef;
@@ -361,6 +402,17 @@ impl ClosedHat {
     #[must_use]
     pub fn tune_ratio(&self) -> f32 {
         self.core.tune_ratio()
+    }
+
+    /// Switches between open hi-hat (`false`, default) and ride cymbal (`true`).
+    pub fn set_ride_mode(&mut self, ride: bool) {
+        self.core.ride_mode = ride;
+    }
+
+    /// Whether ride cymbal mode is enabled.
+    #[must_use]
+    pub fn ride_mode(&self) -> bool {
+        self.core.ride_mode
     }
 }
 
@@ -431,6 +483,17 @@ impl OpenHat {
     #[must_use]
     pub fn tune_ratio(&self) -> f32 {
         self.core.tune_ratio()
+    }
+
+    /// Switches between open hi-hat (`false`, default) and ride cymbal (`true`).
+    pub fn set_ride_mode(&mut self, ride: bool) {
+        self.core.ride_mode = ride;
+    }
+
+    /// Whether ride cymbal mode is enabled.
+    #[must_use]
+    pub fn ride_mode(&self) -> bool {
+        self.core.ride_mode
     }
 }
 

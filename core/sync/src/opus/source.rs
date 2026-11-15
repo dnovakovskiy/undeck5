@@ -84,8 +84,8 @@ pub fn run(ctx: SourceContext, announce: UdpSocket, update: UdpSocket, settings:
             }
         }
         while let Ok(command) = ctx.commands.try_recv() {
-            match command {
-                SourceCommand::Follow(target) => session.set_follow(target, &mut out),
+            if let SourceCommand::Follow(target) = command {
+                session.set_follow(target, &mut out);
             }
         }
         let now = host_time::now_ns();

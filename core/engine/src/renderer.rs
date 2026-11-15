@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use dsp::{Kit, Master};
+use dsp::{Kit, KitModel, Master};
 use sequencer::queue::Consumer;
-use sequencer::{Event, EventKind, MasterParam, ParamTarget, VoiceId};
+use sequencer::{Event, EventKind, MasterParam, ParamTarget, VoiceId, VoiceParam};
 
 use crate::control::dsp_param;
 use crate::timing::SharedTiming;
@@ -88,6 +88,48 @@ impl Renderer {
         self.position = block_start + out.len() as u64;
     }
 
+    /// Renders one block split across dry + per-voice FX send/insert buses
+    /// (`dry`, `echo`, `reverb`, `filter`). Real-time safe.
+    pub fn process_buses(
+        &mut self,
+        dry: &mut [f32],
+        echo: &mut [f32],
+        reverb: &mut [f32],
+        filter: &mut [f32],
+    ) {
+        self.process_buses_at(dry, echo, reverb, filter, 0);
+    }
+
+    /// Multi-bus variant of [`Renderer::process_at`]. Real-time safe.
+    pub fn process_buses_at(
+        &mut self,
+        dry: &mut [f32],
+        echo: &mut [f32],
+        reverb: &mut [f32],
+        filter: &mut [f32],
+        host_ticks: u64,
+    ) {
+        let n = dry
+            .len()
+            .min(echo.len())
+            .min(reverb.len())
+            .min(filter.len());
+        self.timing.publish(self.position, host_ticks);
+        self.pull_events();
+        let block_start = self.position;
+        for i in 0..n {
+            let now = block_start + i as u64;
+            self.apply_due_events(now);
+            let (d, e, r, f) = self.kit.process_buses();
+            let gain = self.master.output_gain();
+            dry[i] = self.master.process(d);
+            echo[i] = e * gain;
+            reverb[i] = r * gain;
+            filter[i] = f * gain;
+        }
+        self.position = block_start + n as u64;
+    }
+
     /// Moves queued events into the pending list, keeping it sorted by
     /// sample so out-of-order arrivals (a parameter change queued behind a
     /// trigger scheduled 100 ms out) are still applied at the right time.
@@ -146,14 +188,37 @@ impl Renderer {
         match event.kind {
             EventKind::Trigger { voice, velocity } => self.kit.trigger(voice.index(), velocity),
             EventKind::Param { target, value } => match target {
-                ParamTarget::Voice(voice, param) => {
-                    self.kit.set_param(voice.index(), dsp_param(param), value);
-                }
+                ParamTarget::Voice(voice, param) => match param {
+                    VoiceParam::SendEcho => self.kit.set_fx_send(voice.index(), 0, value),
+                    VoiceParam::SendReverb => self.kit.set_fx_send(voice.index(), 1, value),
+                    VoiceParam::SendFilter => self.kit.set_fx_send(voice.index(), 2, value),
+                    other => self.kit.set_param(voice.index(), dsp_param(other), value),
+                },
                 ParamTarget::Master(MasterParam::OutputGain) => {
                     self.master.set_output_gain(value);
                 }
                 ParamTarget::Master(MasterParam::Limiter) => {
-                    self.master.set_limiter_enabled(value > 0.5);
+                    if value.is_finite() {
+                        self.master.set_limiter_enabled(value > 0.5);
+                    }
+                }
+                ParamTarget::Master(MasterParam::KitModel) => {
+                    if value.is_finite() {
+                        let code = value.round().clamp(0.0, 7.0) as u8;
+                        self.kit.set_kit_model(KitModel::from_code(code));
+                    }
+                }
+                ParamTarget::Master(MasterParam::CymbalMode) => {
+                    if value.is_finite() {
+                        let mode = value.round().clamp(0.0, 3.0) as u8;
+                        self.kit.set_cymbal_mode(mode);
+                    }
+                }
+                ParamTarget::Master(MasterParam::SoloMask) => {
+                    if value.is_finite() {
+                        let mask = value.round().clamp(0.0, 1023.0) as u16;
+                        self.kit.set_solo_mask(mask);
+                    }
                 }
             },
             EventKind::Flush => {}
@@ -165,7 +230,6 @@ impl Renderer {
 mod tests {
     use super::*;
     use sequencer::queue::event_queue;
-    use sequencer::VoiceParam;
 
     fn renderer() -> (sequencer::queue::Producer, Renderer) {
         let (p, c) = event_queue(64);

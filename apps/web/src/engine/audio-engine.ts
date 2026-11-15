@@ -1,27 +1,15 @@
 // Main-thread side of the audio path. Owns the AudioContext, picks a
-// runtime for the core and forwards patterns, transport and clock messages
-// to it; reports playhead, meter and clock status back. See ADR-0010.
-//
-// Runtimes, best first (forced with ?engine=worklet|script|js):
-//   worklet  WebAssembly core inside an AudioWorklet. The worklet module is
-//            built from bundled source and loaded from a Blob URL, the
-//            compiled WebAssembly.Module travels in processorOptions.
-//   script   WebAssembly core on the main thread in a ScriptProcessorNode,
-//            when the worklet cannot load (insecure origin, CSP blocking
-//            blob: modules).
-//   js       the wasm2js build of the same core in a ScriptProcessorNode,
-//            when the page's CSP forbids compiling WebAssembly.
-// In every runtime the engine runs whole and in lockstep off the audio
-// callback's own sample clock; the main thread never triggers sound.
+// runtime for the core and forwards patterns, transport, clock, RMX-1000 DSP,
+// and per-voice FX messages to EngineHost; reports playhead, meter, armed
+// quantized launch, and phase-error sync telemetry back. See ADR-0010.
 
 import hostSource from "./host.js?raw";
 import workletSource from "./worklet.js?raw";
 import { EngineHost, type CoreApi, type HostEvent, type HostMessage } from "./host.js";
-import { defaultRmxState, RmxFxRack, type RmxState } from "./rmx-fx";
+import { defaultRmxState, type RmxState } from "./rmx-fx";
 import { TimeMap } from "./timemap";
-import { defaultVoiceFxMap, type VoiceFxMap } from "../groove";
 import type { PatternSpec } from "../spec";
-import type { VoiceId } from "../voices";
+import { VOICE_IDS, type VoiceId } from "../voices";
 import wasmBase64 from "virtual:player5/wasm";
 import wasmUrl from "virtual:player5/wasm-url";
 
@@ -34,6 +22,8 @@ export interface EngineStatus {
   tempo: number;
   beat: number;
   locked: boolean;
+  armed: boolean;
+  phaseErrorMs: number;
   position: number;
 }
 
@@ -41,6 +31,11 @@ export interface AudioEvents {
   onState(state: AudioState, detail?: string): void;
   onStep(step: number): void;
   onStatus(status: EngineStatus): void;
+}
+
+export interface AudioOutputInfo {
+  deviceId: string;
+  label: string;
 }
 
 /** ScriptProcessor buffer: ~43 ms at 48 kHz, well inside the 100 ms lookahead. */
@@ -61,13 +56,10 @@ async function compileWasm(): Promise<WebAssembly.Module> {
     if (!wasmBase64) throw new Error("wasm not embedded");
     return WebAssembly.compile(base64ToBytes(wasmBase64));
   } else {
-    // Content-hashed in a build (assets/player5-<hash>.wasm): JS and wasm
-    // of one build always travel together, also through the service worker.
     const url = new URL(wasmUrl, document.baseURI).href;
     try {
       return await WebAssembly.compileStreaming(fetch(url));
     } catch (err) {
-      // Wrong MIME type from a plain static server: compile the bytes.
       if (err instanceof WebAssembly.CompileError) throw err;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`player5.wasm: HTTP ${res.status}`);
@@ -90,23 +82,33 @@ export function requestedMode(): EngineMode | null {
   }
 }
 
+export function sinkSelectionSupported(): boolean {
+  if (__P5_SINGLE__) return false;
+  return (
+    typeof AudioContext === "function" &&
+    "setSinkId" in AudioContext.prototype &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.enumerateDevices
+  );
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private node: AudioNode | null = null;
   private worklet: AudioWorkletNode | null = null;
   private script: ScriptProcessorNode | null = null;
   private host: EngineHost | null = null;
-  private rmx: RmxFxRack | null = null;
+  private extStream: MediaStream | null = null;
+  private extSource: MediaStreamAudioSourceNode | null = null;
   private rmxState: RmxState = defaultRmxState();
-  private rmxPeak = 0;
-  private kitId = "";
-  private kitSpec: PatternSpec | null = null;
-  private voiceFxMap: VoiceFxMap = defaultVoiceFxMap();
-  private humanizeAmount = 0;
+  private gridMeta = { shuffle: 0, lastStep: 16 };
   private voiceFxLevel = 0.75;
   private rollOverdubHandler:
     | ((voice: VoiceId, stepIdx: number, accent: boolean, pitch: number) => void)
     | null = null;
+  private nextPadReqId = 1;
+  private pendingPadResolvers = new Map<number, (stepIdx: number) => void>();
+  private pendingMidi: Array<{ code: number; ms: number }> = [];
   private startPromise: Promise<void> | null = null;
   private wasm: Promise<WebAssembly.Module> | null = null;
   private timeMap: TimeMap | null = null;
@@ -115,7 +117,9 @@ export class AudioEngine {
   private clockMode = 0;
   private nudgeMs = 0;
   private latencyMs = 0;
+  private sinkId = "";
   private wantPlaying = false;
+  private quantizedLaunch = false;
   /** What the current runtime was last told (start/stop). */
   private runtimePlaying = false;
 
@@ -133,15 +137,22 @@ export class AudioEngine {
     return this.wantPlaying;
   }
 
+  get armed(): boolean {
+    return this.wantPlaying && (this.lastStatus?.armed ?? false);
+  }
+
   get running(): boolean {
     return this.state === "running";
   }
 
-  /**
-   * Starts compiling the core right away, before the first Play: no audio
-   * yet, but nothing left to fetch later (an open tab keeps working after
-   * a new deploy replaced the service worker's cache) and Play is faster.
-   */
+  setQuantizedLaunch(enabled: boolean): void {
+    this.quantizedLaunch = enabled;
+  }
+
+  get isQuantizedLaunch(): boolean {
+    return this.quantizedLaunch;
+  }
+
   prepare(): void {
     if (requestedMode() === "js") return;
     this.wasmModule().catch(() => {
@@ -149,7 +160,6 @@ export class AudioEngine {
     });
   }
 
-  /** The compiled core, compiled once. A failed fetch is retried; a refused compile (CSP) is not. */
   private wasmModule(): Promise<WebAssembly.Module> {
     if (!this.wasm) {
       const pending = compileWasm();
@@ -161,11 +171,6 @@ export class AudioEngine {
     return this.wasm;
   }
 
-  /**
-   * Creates the AudioContext and the engine. Call from a user gesture the
-   * first time (autoplay policy): the context is created synchronously,
-   * before any await.
-   */
   ensureStarted(): Promise<void> {
     if (this.ctx && this.state === "running") {
       return this.ctx.state === "running" ? Promise.resolve() : this.ctx.resume();
@@ -180,7 +185,6 @@ export class AudioEngine {
       }
       this.ctx = ctx;
       this.startPromise = this.boot(ctx).catch((err: unknown) => {
-        // Also drops a runtime that attached before the failure.
         this.teardown(err instanceof Error ? err.message : String(err));
         throw err;
       });
@@ -191,8 +195,12 @@ export class AudioEngine {
   private async boot(ctx: AudioContext): Promise<void> {
     this.setState("starting");
     this.timeMap = new TimeMap(ctx);
-    // Resume right away while the gesture is fresh; runtimes attach later.
     const resumed = ctx.resume().catch(() => {});
+    if (this.sinkId && "setSinkId" in ctx) {
+      void (ctx as AudioContext & { setSinkId(id: string): Promise<void> })
+        .setSinkId(this.sinkId)
+        .catch(() => {});
+    }
     const forced = requestedMode();
     let module: WebAssembly.Module | null = null;
     let wasmError: unknown = null;
@@ -240,7 +248,7 @@ export class AudioEngine {
       URL.revokeObjectURL(url);
     }
     const node = new AudioWorkletNode(ctx, "player5", {
-      numberOfInputs: 0,
+      numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
       processorOptions: { module },
@@ -266,38 +274,48 @@ export class AudioEngine {
     });
     node.port.onmessage = (e: MessageEvent<HostEvent>) => this.onHostEvent(e.data);
     node.onprocessorerror = () => this.teardown("audio worklet crashed; press Play to restart");
-    const rmx = new RmxFxRack(ctx);
-    node.connect(rmx.input);
-    this.rmx = rmx;
+    node.connect(ctx.destination);
     this.worklet = node;
     this.node = node;
   }
 
   private startScript(ctx: AudioContext, api: CoreApi): void {
     const host = new EngineHost(api, ctx.sampleRate, (msg) => this.onHostEvent(msg));
-    const node = ctx.createScriptProcessor(SCRIPT_BUFFER, 0, 2);
+    this.host = host;
+    this.attachScriptNode(ctx, host, 0);
+  }
+
+  private attachScriptNode(ctx: AudioContext, host: EngineHost, inputs: 0 | 2): void {
+    if (this.script) {
+      this.script.onaudioprocess = null;
+      try {
+        this.script.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+    }
+    const node = ctx.createScriptProcessor(SCRIPT_BUFFER, inputs, 2);
     node.onaudioprocess = (e: AudioProcessingEvent) => {
       const out = e.outputBuffer;
-      let mono: Float32Array;
+      const inp = e.inputBuffer;
+      const inL = inputs > 0 && inp.numberOfChannels > 0 ? inp.getChannelData(0) : null;
+      const inR = inputs > 0 && inp.numberOfChannels > 1 ? inp.getChannelData(1) : inL;
+      let pair: [Float32Array, Float32Array];
       try {
-        mono = host.process(out.length, Math.round(e.playbackTime * ctx.sampleRate));
+        pair = host.processStereo(out.length, Math.round(e.playbackTime * ctx.sampleRate), inL, inR);
       } catch (err) {
-        // Like a crashed worklet: stop calling into a broken core.
         node.onaudioprocess = null;
         queueMicrotask(() => this.teardown(`engine error: ${err instanceof Error ? err.message : String(err)}`));
         return;
       }
-      for (let c = 0; c < out.numberOfChannels; c++) out.getChannelData(c).set(mono);
+      out.getChannelData(0).set(pair[0]);
+      if (out.numberOfChannels > 1) out.getChannelData(1).set(pair[1]);
     };
-    const rmx = new RmxFxRack(ctx);
-    node.connect(rmx.input);
-    this.rmx = rmx;
-    this.host = host;
+    node.connect(ctx.destination);
     this.script = node;
     this.node = node;
   }
 
-  /** Drops a dead runtime so the next Play builds a fresh one. */
   private teardown(detail: string): void {
     const ctx = this.ctx;
     if (this.worklet) {
@@ -305,14 +323,15 @@ export class AudioEngine {
       this.worklet.onprocessorerror = null;
     }
     if (this.script) this.script.onaudioprocess = null;
+    this.stopExternalInputStream();
     try {
       this.node?.disconnect();
     } catch {
       /* already disconnected */
     }
-    this.rmx?.dispose();
-    this.rmx = null;
-    this.rmxPeak = 0;
+    for (const resolve of this.pendingPadResolvers.values()) resolve(-1);
+    this.pendingPadResolvers.clear();
+    this.pendingMidi.length = 0;
     this.worklet = null;
     this.script = null;
     this.host = null;
@@ -329,34 +348,31 @@ export class AudioEngine {
     this.setState("failed", detail);
   }
 
-  /** Sends the desired state to a fresh runtime. */
   private replay(): void {
     if (this.patternBytes) this.send({ type: "pattern", bytes: this.patternBytes });
+    this.send({ type: "grid-meta", shuffle: this.gridMeta.shuffle, lastStep: this.gridMeta.lastStep });
     this.send({ type: "latency", ms: this.latencyMs });
     this.send({ type: "nudge", ms: this.nudgeMs });
     this.send({ type: "clock-mode", mode: this.clockMode });
-    if (this.kitSpec) {
-      this.rmx?.setBpm(this.kitSpec.bpm);
-      this.rmx?.setShuffle(this.kitSpec.shuffle);
-    }
-    this.rmx?.setRollOverdubHandler(this.rollOverdubHandler);
-    this.rmx?.apply(this.rmxState);
-    this.rmx?.setKitCharacter(this.kitId);
-    this.rmx?.setVoiceFxAndHumanize(this.voiceFxMap, this.humanizeAmount, this.voiceFxLevel);
+    this.send({ type: "vfx-level", level: this.voiceFxLevel });
+    this.send({ type: "rmx-state", state: this.rmxState as unknown as Record<string, unknown> });
     this.runtimePlaying = false;
     this.syncTransport();
   }
 
-  /**
-   * Tells the runtime to start or stop only when that differs from what it
-   * was last told. A second "start" restarts the bar (and could trigger the
-   * first step twice); a Play that resolves after a Stop must not start.
-   */
   private syncTransport(): void {
     if (!this.worklet && !this.host) return;
     if (this.wantPlaying === this.runtimePlaying) return;
     this.runtimePlaying = this.wantPlaying;
-    this.send({ type: this.wantPlaying ? "start" : "stop" });
+    if (this.wantPlaying) {
+      if (this.quantizedLaunch && this.clockMode > 0) {
+        this.send({ type: "start-quantized", quantum: 4 });
+      } else {
+        this.send({ type: "start" });
+      }
+    } else {
+      this.send({ type: "stop" });
+    }
   }
 
   private send(msg: HostMessage): void {
@@ -368,79 +384,38 @@ export class AudioEngine {
     switch (msg.type) {
       case "offset":
         if (this.timeMap) this.timeMap.offset = msg.offset;
+        this.flushPendingMidi();
         break;
-      case "step": {
-        const sr = this.ctx?.sampleRate ?? 48000;
-        const endCtxTime =
-          typeof msg.contextFrame === "number"
-            ? msg.contextFrame / sr
-            : (this.ctx?.currentTime ?? 0);
-        const tempo =
-          typeof msg.tempo === "number" && msg.tempo > 20
-            ? msg.tempo
-            : (this.kitSpec?.bpm ?? 124);
-        if (typeof msg.beat === "number" && this.rmx) {
-          this.rmx.syncTimeline(
-            endCtxTime,
-            msg.beat,
-            tempo,
-            this.wantPlaying && msg.step >= 0,
-            this.kitSpec?.shuffle,
-          );
-        }
-        if (this.wantPlaying && msg.step >= 0 && this.kitSpec && this.rmx) {
-          const stepBeats = 0.25;
-          const beatIntoStep =
-            typeof msg.beat === "number" && msg.beat >= 0
-              ? msg.beat - Math.floor(msg.beat / stepBeats) * stepBeats
-              : 0;
-          const straightStepCtxTime = endCtxTime - (beatIntoStep * 60) / tempo;
-          this.rmx.triggerKitStep(this.kitId, msg.step, this.kitSpec, straightStepCtxTime);
-        }
+      case "step":
         this.events.onStep(this.wantPlaying ? msg.step : -1);
         break;
-      }
       case "status": {
         const { type: _t, offset, ...status } = msg;
-        if (this.rmx) {
-          const sr = this.ctx?.sampleRate ?? 48000;
-          const statusCtxTime =
-            Number.isFinite(status.position) && Number.isFinite(offset)
-              ? (status.position + offset) / sr
-              : (this.ctx?.currentTime ?? 0);
-          this.rmx.syncTimeline(
-            statusCtxTime,
-            status.beat,
-            status.tempo,
-            this.wantPlaying && status.step >= 0,
-            this.kitSpec?.shuffle,
-          );
-          const rmxActive =
-            this.rmxState.sceneAmount > 0.005 ||
-            this.rmxState.releaseHeld ||
-            this.rmxState.xpadRolling ||
-            this.rmx.hasActiveVoiceFxOrHumanize() ||
-            this.rmxPeak > 0.001;
-          if (rmxActive) {
-            const live = this.rmx.readPeak();
-            this.rmxPeak = Math.max(live, this.rmxPeak * 0.89);
-            if (this.rmxPeak > status.peak) status.peak = this.rmxPeak;
-          } else {
-            this.rmxPeak = 0;
-          }
-        }
         this.lastStatus = status;
-        // Also in every status: a lost "offset" message must not leave
-        // the clock sources without a time mapping.
         if (this.timeMap) {
           this.timeMap.offset = offset;
           this.timeMap.sample();
         }
+        this.flushPendingMidi();
         this.events.onStatus(status);
         break;
       }
+      case "pad-triggered": {
+        const resolve = this.pendingPadResolvers.get(msg.id);
+        if (resolve) {
+          this.pendingPadResolvers.delete(msg.id);
+          resolve(msg.stepIdx);
+        }
+        break;
+      }
+      case "overdub": {
+        const voice = VOICE_IDS[msg.voiceIdx];
+        if (voice && this.rollOverdubHandler) {
+          this.rollOverdubHandler(voice, msg.stepIdx, msg.accent, msg.pitch);
+        }
+        break;
+      }
       case "error":
-        // A rejected pattern leaves the engine running on the previous one.
         if (msg.fatal === false) console.warn("player5:", msg.message);
         else this.teardown(msg.message);
         break;
@@ -465,25 +440,19 @@ export class AudioEngine {
       this.wantPlaying = false;
       throw err;
     }
-    // A fresh runtime was started by replay(); Stop may have come since.
     this.syncTransport();
   }
 
   stop(): void {
     this.wantPlaying = false;
     this.syncTransport();
-    this.rmx?.syncTimeline(
-      this.ctx?.currentTime ?? 0,
-      -1,
-      this.kitSpec?.bpm ?? 124,
-      false,
-      this.kitSpec?.shuffle,
-    );
+    if (this.lastStatus) this.lastStatus.armed = false;
     this.events.onStep(-1);
   }
 
   /** Clock mode code (core/ffi table): 0 internal, 1..4 follow precision. */
   setClockMode(mode: number): void {
+    if (mode === 0) this.pendingMidi.length = 0;
     if (mode === this.clockMode) return;
     this.clockMode = mode;
     this.send({ type: "clock-mode", mode });
@@ -503,17 +472,102 @@ export class AudioEngine {
     this.send({ type: "resync" });
   }
 
-  /** Engine sample heard at performance time `ms`, or null before audio runs. */
+  /** Triggers an audible Sync Calibration click through the engine output. */
+  async triggerSyncClick(): Promise<void> {
+    await this.ensureStarted();
+    this.send({ type: "sync-click" });
+  }
+
+  /** Triggers one of the 10 active Rust drum voices live (Shift+1..0 audition). */
+  async triggerVoice(voice: VoiceId, velocity = 0.95): Promise<void> {
+    await this.ensureStarted();
+    const voiceIdx = Math.max(0, VOICE_IDS.indexOf(voice));
+    this.send({ type: "trigger-voice", voiceIdx, velocity });
+  }
+
+  /** Selects Chrome/Edge audio output device via AudioContext.setSinkId. */
+  async setAudioOutputDevice(sinkId: string): Promise<boolean> {
+    this.sinkId = sinkId;
+    if (!this.ctx || !("setSinkId" in this.ctx)) return false;
+    try {
+      await (this.ctx as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(sinkId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listAudioOutputs(): Promise<AudioOutputInfo[]> {
+    if (!sinkSelectionSupported()) return [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices
+        .filter((d) => d.kind === "audiooutput")
+        .map((d, i) => ({
+          deviceId: d.deviceId,
+          label: d.label || (d.deviceId === "default" ? "System Default Output" : `Output ${i + 1}`),
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Routes live external stereo audio (soundcard/loopback) into the RMX-1000 DSP bus. */
+  async setExternalInput(enabled: boolean): Promise<boolean> {
+    if (__P5_SINGLE__) return false;
+    if (!enabled) {
+      this.stopExternalInputStream();
+      this.send({ type: "ext-gain", gain: 0 });
+      return false;
+    }
+    try {
+      await this.ensureStarted();
+      if (!this.ctx || !this.node || !navigator.mediaDevices?.getUserMedia) return false;
+      this.stopExternalInputStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
+      if (this.script && this.host) {
+        this.attachScriptNode(this.ctx, this.host, 2);
+      }
+      const src = this.ctx.createMediaStreamSource(stream);
+      src.connect(this.node!);
+      this.extStream = stream;
+      this.extSource = src;
+      this.send({ type: "ext-gain", gain: 1 });
+      return true;
+    } catch {
+      this.stopExternalInputStream();
+      this.send({ type: "ext-gain", gain: 0 });
+      return false;
+    }
+  }
+
+  private stopExternalInputStream(): void {
+    const hadSource = this.extSource !== null;
+    try {
+      this.extSource?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    this.extSource = null;
+    if (this.extStream) {
+      for (const track of this.extStream.getTracks()) track.stop();
+      this.extStream = null;
+    }
+    if (hadSource && this.script && this.host && this.ctx) {
+      this.attachScriptNode(this.ctx, this.host, 0);
+    }
+  }
+
   engineSampleAt(ms: number): number | null {
     return this.state === "running" ? (this.timeMap?.engineSampleAt(ms) ?? null) : null;
   }
 
-  /**
-   * The engine's beat being heard at performance time `ms`. Status
-   * messages report the beat at the render position, which runs ahead of
-   * the speakers by the output latency (and the status is up to 50 ms
-   * old); this extrapolates it at the reported tempo. Null before audio.
-   */
   beatHeardAt(ms: number): number | null {
     const s = this.lastStatus;
     const sample = this.engineSampleAt(ms);
@@ -522,7 +576,6 @@ export class AudioEngine {
     return s.beat + ((sample - s.position) / sr) * (s.tempo / 60);
   }
 
-  /** Observation from an external clock at performance time `ms`. */
   observe(ms: number, kind: number, phase: number, bpm: number): boolean {
     const sample = this.engineSampleAt(ms);
     if (sample === null) return false;
@@ -530,15 +583,30 @@ export class AudioEngine {
     return true;
   }
 
-  /** MIDI clock message (0 clock, 1 start, 2 continue, 3 stop) at `ms`. */
+  private flushPendingMidi(): void {
+    if (!this.pendingMidi.length) return;
+    if (this.engineSampleAt(performance.now()) === null) return;
+    const queued = this.pendingMidi.splice(0);
+    for (const item of queued) {
+      const sample = this.engineSampleAt(item.ms);
+      if (sample !== null) this.send({ type: "midi", code: item.code, sample });
+    }
+  }
+
   midi(code: number, ms: number): boolean {
+    this.flushPendingMidi();
     const sample = this.engineSampleAt(ms);
-    if (sample === null) return false;
+    if (sample === null) {
+      if (this.state === "starting" || this.state === "running") {
+        if (code === 1) this.pendingMidi.length = 0;
+        if (this.pendingMidi.length < 256) this.pendingMidi.push({ code, ms });
+      }
+      return false;
+    }
     this.send({ type: "midi", code, sample });
     return true;
   }
 
-  /** Tap at performance time `ms`. */
   tap(ms: number): boolean {
     const sample = this.engineSampleAt(ms);
     if (sample === null) return false;
@@ -546,48 +614,86 @@ export class AudioEngine {
     return true;
   }
 
-  /** Applies Pioneer RMX-1000 Scene FX, Isolator FX and Release FX parameters. */
-  setRmxState(state: RmxState): void {
+  /** Applies Pioneer RMX-1000 Scene FX, Isolator FX, X-Pad and Release FX parameters. */
+  setRmxState(state: RmxState, eventTimeMs?: number): void {
+    const wasRolling = this.rmxState.xpadRolling;
     this.rmxState = { ...state };
-    this.rmx?.apply(this.rmxState);
+    const now = performance.now();
+    const ts =
+      typeof eventTimeMs === "number" && eventTimeMs > 0 && Math.abs(now - eventTimeMs) < 2000
+        ? eventTimeMs
+        : now;
+    const rollStartHeardBeat =
+      !wasRolling && state.xpadRolling ? (this.beatHeardAt(ts) ?? -1) : -1;
+    this.send({
+      type: "rmx-state",
+      state: {
+        ...(this.rmxState as unknown as Record<string, unknown>),
+        rollStartHeardBeat,
+      },
+    });
   }
 
-  /** Sets the active TR drum kit character & step layer spec. */
-  setKit(kitId: string, spec: PatternSpec): void {
-    this.kitId = kitId;
-    this.kitSpec = spec;
-    if (!this.wantPlaying) {
-      this.rmx?.setBpm(spec.bpm);
-    }
-    this.rmx?.setShuffle(spec.shuffle);
-    this.rmx?.setKitCharacter(kitId);
+  /** Synchronizes shuffle and polymetric loop length with EngineHost RMX quantizer. */
+  setKit(_kitId: string, spec: PatternSpec): void {
+    this.gridMeta = {
+      shuffle: spec.shuffle || 0,
+      lastStep: spec.last_step || 16,
+    };
+    this.send({ type: "grid-meta", shuffle: this.gridMeta.shuffle, lastStep: this.gridMeta.lastStep });
   }
 
-  /** Registers callback for overdub hits generated by RMX-1000's Web Audio Beat Roll scheduler. */
   setRmxRollOverdubHandler(
     fn: ((voice: VoiceId, stepIdx: number, accent: boolean, pitch: number) => void) | null,
   ): void {
     this.rollOverdubHandler = fn;
-    this.rmx?.setRollOverdubHandler(fn);
   }
 
-  /** Updates Per-Voice FX sends (Echo, Reverb, Filter) and real-time Humanize amount (0..1). */
-  setVoiceFxAndHumanize(map: VoiceFxMap, humanize: number, fxLevel = 0.75): void {
-    this.voiceFxMap = map;
-    this.humanizeAmount = humanize;
-    this.voiceFxLevel = fxLevel;
-    this.rmx?.setVoiceFxAndHumanize(map, humanize, fxLevel);
+  /** Updates master stereo return level for Per-Voice FX buses (Echo, Reverb, Acid Filter). */
+  setVoiceFxLevel(fxLevel: number): void {
+    this.voiceFxLevel = Math.max(0, Math.min(1, fxLevel));
+    this.send({ type: "vfx-level", level: this.voiceFxLevel });
   }
 
   /**
-   * Triggers a synthesized X-Pad hit (starts audio if idle), snapping to the
-   * Step Sequencer's beat grid when playing and Quantize is enabled. Returns
-   * the quantized step index (0..15, or -1 when stopped).
+   * Triggers a sample-accurate X-Pad hit inside EngineHost, snapping to the
+   * 16th-note grid when playing and Quantize is enabled. Returns the quantized
+   * step index (0..15, or -1 when stopped).
    */
-  async triggerRmxPad(voice: VoiceId, pitchShift = 0, velocity = 0.9): Promise<number> {
+  async triggerRmxPad(
+    voice: VoiceId,
+    pitchShift = 0,
+    velocity = 0.9,
+    eventTimeMs?: number,
+  ): Promise<number> {
+    const now = performance.now();
+    const ts =
+      typeof eventTimeMs === "number" && eventTimeMs > 0 && Math.abs(now - eventTimeMs) < 2000
+        ? eventTimeMs
+        : now;
     await this.ensureStarted();
-    this.rmxPeak = Math.max(this.rmxPeak, velocity * 0.5);
-    return this.rmx?.quantizeAndTriggerPad(voice, pitchShift, velocity) ?? -1;
+    const heardBeat = this.beatHeardAt(ts) ?? -1;
+    const voiceIdx = Math.max(0, VOICE_IDS.indexOf(voice));
+    const id = this.nextPadReqId++;
+    return new Promise<number>((resolve) => {
+      const timer = setTimeout(() => {
+        if (this.pendingPadResolvers.delete(id)) resolve(-1);
+      }, 250);
+      this.pendingPadResolvers.set(id, (stepIdx) => {
+        clearTimeout(timer);
+        resolve(stepIdx);
+      });
+      this.send({
+        type: "trigger-pad",
+        id,
+        voiceIdx,
+        pitch: pitchShift,
+        velocity,
+        quantize: this.rmxState.xpadQuantize !== false,
+        overdub: this.rmxState.xpadOverdub,
+        heardBeat,
+      });
+    });
   }
 
   private setState(state: AudioState, detail?: string): void {

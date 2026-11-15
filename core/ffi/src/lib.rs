@@ -186,6 +186,64 @@ pub unsafe extern "C" fn p5_engine_start(engine: *mut P5Engine) {
     }
 }
 
+/// Starts playback quantized to `quantum_beats` (e.g. `4.0` for next bar
+/// downbeat) when following a locked external clock, else immediately.
+///
+/// # Safety
+/// `engine` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn p5_engine_start_quantized(engine: *mut P5Engine, quantum_beats: f64) {
+    if let Some(e) = unsafe { engine.as_mut() } {
+        e.0.start_quantized(quantum_beats);
+    }
+}
+
+/// `1` while armed for a quantized launch boundary, `0` otherwise.
+///
+/// # Safety
+/// `engine` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn p5_engine_is_armed(engine: *const P5Engine) -> i32 {
+    unsafe { engine.as_ref() }.map_or(0, |e| i32::from(e.0.is_launch_armed()))
+}
+
+/// Latest follower phase residual in milliseconds (`0.0` on internal clock).
+///
+/// # Safety
+/// `engine` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn p5_engine_phase_error_ms(engine: *const P5Engine) -> f64 {
+    unsafe { engine.as_ref() }.map_or(0.0, |e| e.0.phase_error_ms())
+}
+
+/// Queues an immediate one-shot voice trigger (`voice_index` `0..10`,
+/// `velocity` `0..=1`). Returns `0` on success, `1` on invalid arguments or
+/// full queue.
+///
+/// # Safety
+/// `engine` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn p5_engine_trigger_voice(
+    engine: *mut P5Engine,
+    voice_index: i32,
+    velocity: f32,
+) -> i32 {
+    let Some(e) = (unsafe { engine.as_mut() }) else {
+        return 1;
+    };
+    let Ok(idx) = usize::try_from(voice_index) else {
+        return 1;
+    };
+    let Some(&voice) = sequencer::VoiceId::ALL.get(idx) else {
+        return 1;
+    };
+    if e.0.trigger_voice(voice, velocity) {
+        0
+    } else {
+        1
+    }
+}
+
 /// Stops scheduling new steps.
 ///
 /// # Safety
@@ -384,6 +442,37 @@ pub unsafe extern "C" fn p5_engine_render(engine: *mut P5Engine, out: *mut f32, 
         )
     };
     engine.render(out);
+}
+
+/// Renders `frames` samples split across `dry`, `echo`, `reverb` and `filter`
+/// buses, ticking the scheduler first. Single-threaded by design.
+///
+/// # Safety
+/// `engine` must be a live handle; `dry`, `echo`, `reverb`, and `filter` must
+/// each point to `frames` distinct writable `f32`s.
+#[no_mangle]
+pub unsafe extern "C" fn p5_engine_render_buses(
+    engine: *mut P5Engine,
+    dry: *mut f32,
+    echo: *mut f32,
+    reverb: *mut f32,
+    filter: *mut f32,
+    frames: usize,
+) {
+    if engine.is_null() || dry.is_null() || echo.is_null() || reverb.is_null() || filter.is_null() {
+        return;
+    }
+    // SAFETY: per the caller contract.
+    let (engine, dry, echo, reverb, filter) = unsafe {
+        (
+            &mut (*engine).0,
+            std::slice::from_raw_parts_mut(dry, frames),
+            std::slice::from_raw_parts_mut(echo, frames),
+            std::slice::from_raw_parts_mut(reverb, frames),
+            std::slice::from_raw_parts_mut(filter, frames),
+        )
+    };
+    engine.render_buses(dry, echo, reverb, filter);
 }
 
 // ---- Web-friendly variants -------------------------------------------------

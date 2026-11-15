@@ -358,8 +358,10 @@ fn run(
             break;
         }
         let now = host_time::now_ns();
-        while let Ok(SourceCommand::Follow(target)) = ctx.commands.try_recv() {
-            tracker.follow(target, now);
+        while let Ok(cmd) = ctx.commands.try_recv() {
+            if let SourceCommand::Follow(target) = cmd {
+                tracker.follow(target, now);
+            }
         }
         let wait = tracker.deadline().map_or(POLL, |d| {
             Duration::from_nanos(d.saturating_sub(now)).min(POLL)
@@ -728,6 +730,7 @@ impl Tracker {
                 let why = match self.target {
                     FollowTarget::Device(_) => "as requested",
                     FollowTarget::Master if self.table.master(now) == Some(n) => "tempo master",
+                    FollowTarget::Master if self.table.is_on_air(n, now) => "on-air playing player",
                     FollowTarget::Master => "lowest-numbered playing player",
                 };
                 format!("Pro DJ Link: tracking device {n} ({name}), {why}")
