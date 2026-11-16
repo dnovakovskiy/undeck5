@@ -337,10 +337,145 @@ input[type="range"] {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 .tools select {
-  min-width: 10em;
+  min-width: 9.2em;
+}
+
+/* ---- Individual Machine ON/OFF Power Strip & Session Save/Reset ---- */
+
+.machine-switches {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  padding: 3px 6px;
+}
+.mach-group-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 3px;
+  user-select: none;
+}
+.mach-btn,
+.panel-power-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 7px;
+  background-color: var(--field);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+}
+.panel-power-btn {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+.mach-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #454c5e;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+.mach-btn[aria-pressed="false"],
+.panel-power-btn[aria-pressed="false"] {
+  opacity: 0.72;
+}
+.mach-tr[aria-pressed="true"] {
+  background-color: rgba(255, 106, 43, 0.18);
+  border-color: #ff6a2b;
+  color: var(--text);
+}
+.mach-tr[aria-pressed="true"] .mach-led {
+  background-color: #ff6a2b;
+  box-shadow: 0 0 8px #ff6a2b;
+}
+.mach-djs[aria-pressed="true"] {
+  background-color: rgba(0, 212, 255, 0.18);
+  border-color: #00d4ff;
+  color: var(--text);
+}
+.mach-djs[aria-pressed="true"] .mach-led {
+  background-color: #00d4ff;
+  box-shadow: 0 0 8px #00d4ff;
+}
+.mach-rmx[aria-pressed="true"] {
+  background-color: rgba(96, 165, 250, 0.18);
+  border-color: #60a5fa;
+  color: var(--text);
+}
+.mach-rmx[aria-pressed="true"] .mach-led {
+  background-color: #60a5fa;
+  box-shadow: 0 0 8px #60a5fa;
+}
+
+.session-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.save-btn {
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border-width: 1.5px;
+  border-color: #10b981;
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+}
+.save-btn[data-save-state="dirty"] {
+  background-color: #10b981;
+  border-color: #6ee7b7;
+  color: #061510;
+}
+.save-btn[data-save-state="saved"] {
+  background-color: rgba(16, 185, 129, 0.25);
+  border-color: #34d399;
+  color: #a7f3d0;
+}
+.save-btn:hover {
+  border-color: #6ee7b7;
+}
+.reset-btn {
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border-width: 1.5px;
+  border-color: #f97316;
+  background-color: rgba(249, 115, 22, 0.16);
+  color: #fdba74;
+}
+.reset-btn:hover {
+  background-color: #ef4444;
+  border-color: #fca5a5;
+  color: #ffffff;
+}
+
+#grid-panel[data-machine-off="true"],
+#djs-panel[data-machine-off="true"],
+#rmx-panel[data-machine-off="true"] {
+  border-style: dashed;
+}
+#grid-panel[data-machine-off="true"] > :not(.panel-head),
+#djs-panel[data-machine-off="true"] > :not(.panel-head),
+#rmx-panel[data-machine-off="true"] > :not(.panel-head) {
+  opacity: 0.56;
+  filter: saturate(0.45);
 }
 
 /* ---- grid ---- */
@@ -1168,6 +1303,22 @@ input[type="range"] {
   .tools select {
     flex: 1 1 8.5em;
     min-width: 0;
+  }
+  .machine-switches {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .mach-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+  .session-actions {
+    width: 100%;
+    margin-left: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .bpm-row input {
     flex: 1;
@@ -2108,7 +2259,7 @@ input[type="range"] {
     color: var(--head);
   }
   #app[data-surface="booth"] .transport {
-    grid-template-columns: auto auto minmax(160px, 1fr) auto;
+    grid-template-columns: auto auto minmax(180px, 1fr);
     padding: 4px 8px;
     gap: 4px 10px;
     align-items: center;
@@ -2152,9 +2303,27 @@ input[type="range"] {
     font-size: 10px;
   }
   #app[data-surface="booth"] .tools {
-    grid-column: auto;
+    grid-column: 1 / -1;
     flex-wrap: nowrap;
     gap: 4px;
+  }
+  #app[data-surface="booth"] .machine-switches {
+    padding: 2px 4px;
+    gap: 3px;
+  }
+  #app[data-surface="booth"] .mach-group-label {
+    font-size: 9px;
+  }
+  #app[data-surface="booth"] .mach-btn,
+  #app[data-surface="booth"] .panel-power-btn {
+    min-height: 21px;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .mach-led {
+    width: 6px;
+    height: 6px;
   }
   #app[data-surface="booth"] .tools button,
   #app[data-surface="booth"] .tools select {
@@ -3237,6 +3406,26 @@ input[type="range"] {
   background-color: #dce6f5;
   border-color: #0055d4;
   color: #0044ab;
+}
+:root[data-theme="tr-silver"] .save-btn {
+  background-color: rgba(16, 185, 129, 0.18);
+  border-color: #059669;
+  color: #064e3b;
+}
+:root[data-theme="tr-silver"] .save-btn[data-save-state="dirty"] {
+  background-color: #059669;
+  border-color: #047857;
+  color: #ffffff;
+}
+:root[data-theme="tr-silver"] .save-btn[data-save-state="saved"] {
+  background-color: rgba(16, 185, 129, 0.28);
+  border-color: #059669;
+  color: #064e3b;
+}
+:root[data-theme="tr-silver"] .reset-btn {
+  background-color: rgba(234, 88, 12, 0.16);
+  border-color: #ea580c;
+  color: #7c2d12;
 }
 
 /* 3. TR-8S Neon: obsidian club black + glowing RGB neon row strips per drum voice */

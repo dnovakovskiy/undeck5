@@ -791,18 +791,21 @@ test("64-step 4-bar A/B/C/D and A-D chain variations edit independent bars, copy
   expect(errors).toEqual([]);
 });
 
-test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, 16-step strip sync & zero-scroll Booth Split swap", async ({ page }) => {
+test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, independent deck state & zero-scroll Booth Split swap", async ({ page }) => {
   const errors = guard(page);
   await page.setViewportSize({ width: 1440, height: 800 });
   await page.goto("/");
+  const trSnare3Before = (await step(page, "snare", 3).getAttribute("data-state")) ?? "off";
 
-  // Switch to standalone DJS-1000 Deck surface
+  // Switch to standalone DJS-1000 Deck surface -> auto-solos DJS-1000 ON and TR Drums OFF
   await page.locator("#mode-djs").click();
   await expect(app(page)).toHaveAttribute("data-surface", "djs");
   await expect(page.locator("#djs-panel")).toBeVisible();
   await expect(page.locator("#grid-panel")).toBeHidden();
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "false");
 
-  // Launch Scene 2 -> loads 4-bar 64-step scene
+  // Launch Scene 2 -> loads 4-bar 64-step scene on DJS-1000 without overwriting TR Drums
   await page.locator('[data-djs-scene="1"]').click();
   await expect(page.locator('[data-djs-scene="1"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-djs-bar="abcd"]')).toHaveAttribute("aria-pressed", "true");
@@ -813,7 +816,8 @@ test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, 16-step strip sync & z
   const djsStep3 = page.locator('[data-djs-step="3"]');
   const beforeState = await djsStep3.getAttribute("data-state");
   await djsStep3.click();
-  await expect(djsStep3).not.toHaveAttribute("data-state", beforeState ?? "off");
+  const editedDjsState = await djsStep3.getAttribute("data-state");
+  expect(editedDjsState).not.toBe(beforeState ?? "off");
 
   // Switch pad modes (MUTE / SOLO, 16-PAD PITCH, HOT ROLL) and Capture Scene
   await page.locator('[data-djs-pad-mode="mute"]').click();
@@ -836,6 +840,8 @@ test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, 16-step strip sync & z
   await expect(app(page)).toHaveAttribute("data-booth-deck", "djs");
   await expect(page.locator("#djs-panel")).toBeVisible();
   await expect(page.locator("#rmx-panel")).toBeVisible();
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "false");
 
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 800 });
@@ -860,10 +866,96 @@ test("Pioneer DJS-1000 Deck mode: 8 Scenes, 4x4 RGB Pads, 16-step strip sync & z
     expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
   }
 
-  // Swap back to TR Grid inside Booth Split and verify step 3 edit synced bidirectionally
+  // Swap back to TR Grid inside Booth Split -> TR Drums kept its own independent pattern
   await page.locator("#booth-swap-tr").click();
   await expect(app(page)).toHaveAttribute("data-booth-deck", "sequencer");
   await expect(page.locator("#grid-panel")).toBeVisible();
-  await expect(step(page, "snare", 3)).not.toHaveAttribute("data-state", beforeState ?? "off");
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "false");
+  await expect(step(page, "snare", 3)).toHaveAttribute("data-state", trSnare3Before);
+
+  // Swap back to DJS-1000 -> DJS retained its own edited Scene 2 pattern
+  await page.locator("#booth-swap-djs").click();
+  await expect(page.locator('[data-djs-step="3"]')).toHaveAttribute("data-state", editedDjsState!);
+  expect(errors).toEqual([]);
+});
+
+test("Individual Machine ON/OFF switches and explicit Save / Reset startup persistence", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  // Default power state: TR Drums ON, DJS-1000 OFF, RMX-1000 ON
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#power-rmx")).toHaveAttribute("aria-pressed", "true");
+
+  await play(page);
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-30);
+
+  // Turn OFF TR Drums (now both TR and DJS are OFF) -> output falls silent
+  await page.locator("#power-tr").click();
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#grid-panel")).toHaveAttribute("data-machine-off", "true");
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeLessThan(-45);
+
+  // Turn ON DJS-1000 alone -> DJS-1000 scene plays audio
+  await page.locator("#power-djs").click();
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-30);
+
+  // Turn ON TR Drums too -> both machines layer simultaneously and manual mix survives surface switch
+  await page.locator("#power-tr").click();
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#mode-booth").click();
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-djs")).toHaveAttribute("aria-pressed", "true");
+
+  // Engage RMX-1000 3-band Isolator kill -> silences master, then toggle RMX-1000 OFF -> dry drums return
+  await page.locator("#rmx-kill-low").click();
+  await page.locator("#rmx-kill-mid").click();
+  await page.locator("#rmx-kill-high").click();
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeLessThan(-42);
+
+  await page.locator("#power-rmx").click();
+  await expect(page.locator("#power-rmx")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#rmx-panel")).toHaveAttribute("data-machine-off", "true");
+  await expect(page.locator("#rmx-readout")).toContainText("BYPASSED");
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-30);
+
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.locator("#mode-seq").click();
+
+  // Unsaved edits do NOT leak into fresh "/" startup
+  await page.locator("#reset-btn").click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+  await expect(page.locator("#save-btn")).toHaveAttribute("data-save-state", "dirty");
+
+  await page.goto("about:blank");
+  await page.goto("/");
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
+
+  // Explicit Save persists startup session across fresh "/" opens
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+  await page.locator("#save-btn").click();
+  await expect(page.locator("#save-btn")).toHaveAttribute("data-save-state", "saved");
+
+  await page.goto("about:blank");
+  await page.goto("/");
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+
+  // Prominent Reset restores factory default on all machines & clears saved startup session + URL hash
+  await page.locator("#reset-btn").click();
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
+  await expect(page.locator("#save-btn")).toHaveAttribute("data-save-state", "clean");
+  expect(page.url()).not.toContain("#p=");
+
+  await page.goto("about:blank");
+  await page.goto("/");
+  await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
   expect(errors).toEqual([]);
 });

@@ -14,7 +14,8 @@
 - **What is it?** Three pieces of iconic DJ/studio hardware fused into **one app** so you can sketch loops on your couch or drop live drums & FX over a bedroom DJ set.
 - **Do I need MIDI controllers or CDJs?** **Nope.** Your laptop keyboard plays every pad, step, roll, and FX drop. (If you *do* use Ableton, Traktor, Serato, or Pioneer decks, it locks right to your BPM.)
 - **How fast do I get sound?** Open it → hit **`Space`** → pick a preset (`House`, `Techno`, `Nu-Disco`) → start clicking glowing steps.
-- **How do I save a beat?** Every tweak updates the URL. Copy the link, text it to a friend, or bookmark it.
+- **Won't all 3 machines talk over each other?** **Nope.** The **`ON AIR` strip** (`TR Drums` / `DJS-1000` / `RMX-1000`) solos whichever deck you're looking at by default — or click both **`TR Drums`** + **`DJS-1000`** ON to layer them live, and toggle **`RMX-1000`** OFF anytime to bypass FX cleanly.
+- **How do I save (or wipe) a beat?** Fresh builds always open clean so yesterday's late-night chaos doesn't ambush you. Hit **`Save`** to keep your default startup setup, **`Reset`** to return all 3 machines to factory fresh, or **`Share`** to copy a `#p=` pattern link.
 
 <div align="center">
   <img src="docs/assets/three-decks.svg" alt="1. Build the Groove -> 2. Cook the Drop -> 3. Jam Solo or Sync" width="100%" />

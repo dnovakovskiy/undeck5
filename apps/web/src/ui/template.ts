@@ -100,6 +100,18 @@ export function template(o: TemplateOptions): string {
       ${knob("flam", "Flam")}
     </div>
     <div class="tools">
+      <div class="machine-switches" role="group" aria-label="Machine audio switches">
+        <span class="mach-group-label" aria-hidden="true">ON AIR</span>
+        <button id="power-tr" type="button" class="mach-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF">
+          <i class="mach-led" aria-hidden="true"></i><span>TR Drums</span>
+        </button>
+        <button id="power-djs" type="button" class="mach-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 standalone sequencer audio ON or OFF">
+          <i class="mach-led" aria-hidden="true"></i><span>DJS-1000</span>
+        </button>
+        <button id="power-rmx" type="button" class="mach-btn mach-rmx" aria-pressed="true" title="Toggle Pioneer RMX-1000 FX station ON or Bypass">
+          <i class="mach-led" aria-hidden="true"></i><span>RMX-1000</span>
+        </button>
+      </div>
       <button id="flam-mode" type="button" class="toggle" aria-pressed="false" title="While on, tapping a step toggles its flam">Flam edit</button>
       <select id="preset" aria-label="Load a preset pattern">
         <option value="">Presets…</option>${presetOptions}
@@ -108,8 +120,12 @@ export function template(o: TemplateOptions): string {
         <option value="">Drum kit…</option>${kitOptions}
       </select>
       <button id="undo" type="button" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl/Cmd+Z)">Undo</button>
-      <button id="clear" type="button" title="Clear every step (undo restores)">Clear</button>
+      <button id="clear" type="button" title="Clear every step on active machine (undo restores)">Clear</button>
       <button id="share" type="button" title="${o.single ? "Copy the pattern code" : "Copy a link to this pattern"}">Share</button>
+      <div class="session-actions" role="group" aria-label="Session save and factory reset">
+        <button id="save-btn" type="button" class="save-btn" title="Save current patterns &amp; machine ON/OFF switches so they reload next session">Save</button>
+        <button id="reset-btn" type="button" class="reset-btn" title="Reset all machines, FX &amp; saved startup pattern back to clean factory default">Reset</button>
+      </div>
     </div>
   </section>
 
@@ -121,6 +137,7 @@ export function template(o: TemplateOptions): string {
         <output id="rmx-readout" class="rmx-readout" aria-live="polite">BPF ECHO 0% · X-PAD SNARE 1/8</output>
       </div>
       <div class="rmx-head-actions">
+        <button id="panel-power-rmx" type="button" class="panel-power-btn mach-rmx" aria-pressed="true" title="Toggle RMX-1000 FX station ON or Bypass"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-rmx-label">FX ON</span></button>
         <button id="rmx-ext-in" type="button" class="toggle small"${o.single ? " hidden" : ""} aria-pressed="false" title="Route external stereo audio input (loopback / mixer return) through the RMX-1000 FX engine">EXT IN</button>
         <button id="rmx-reset" type="button" class="small" title="Reset all RMX-1000 FX parameters">Reset FX</button>
       </div>
@@ -263,6 +280,7 @@ export function template(o: TemplateOptions): string {
         <span id="djs-sync-badge" class="djs-sync-badge" data-locked="false">INT MASTER</span>
       </div>
       <div class="djs-head-actions">
+        <button id="panel-power-djs" type="button" class="panel-power-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-djs-label">OFF</span></button>
         <button id="booth-swap-tr" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
         <button id="djs-quantize" type="button" class="toggle small" aria-pressed="true" title="Snap DJS-1000 pads &amp; rolls to the beat grid">QUANTIZE</button>
         <button id="djs-live-rec" type="button" class="toggle small djs-rec-btn" aria-pressed="false" title="Overdub live pad hits into the active bar">LIVE REC</button>
@@ -352,6 +370,7 @@ export function template(o: TemplateOptions): string {
         </span>
       </div>
       <div class="grid-head-right">
+        <button id="panel-power-tr" type="button" class="panel-power-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-tr-label">ON AIR</span></button>
         <button id="booth-swap-djs" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Pioneer DJS-1000 Sampler/Sequencer">DJS-1000 ⇄</button>
         <span class="hint" id="grid-hint"></span>
       </div>

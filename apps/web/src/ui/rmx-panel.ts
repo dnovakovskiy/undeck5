@@ -69,6 +69,7 @@ const ROLL_DIVS: readonly RollDivision[] = [1, 2, 4, 8, 16, 32];
 
 export class RmxPanel {
   private state: RmxState = defaultRmxState();
+  private bypassed = false;
   private rollPointerDown = false;
   private rollStartY = 0;
   private rollBasePitch = 0;
@@ -87,7 +88,7 @@ export class RmxPanel {
     private readonly cb: RmxCallbacks,
   ) {
     this.cb.audio.setRmxRollOverdubHandler((voice, stepIdx, accent, pitch) => {
-      if (this.state.xpadOverdub) {
+      if (this.state.xpadOverdub && !this.bypassed) {
         this.cb.onOverdubHit(voice, stepIdx, accent, pitch);
       }
     });
@@ -100,8 +101,39 @@ export class RmxPanel {
     return this.state;
   }
 
+  get effectiveState(): RmxState {
+    return this.bypassed ? defaultRmxState() : this.state;
+  }
+
+  get isBypassed(): boolean {
+    return this.bypassed;
+  }
+
+  setBypassed(bypassed: boolean): void {
+    if (bypassed) {
+      this.stopRoll();
+      this.rollPointerDown = false;
+      this.state.releaseHeld = false;
+    }
+    this.bypassed = bypassed;
+    this.root.dataset.machineOff = String(bypassed);
+    this.pushState();
+  }
+
+  reset(): void {
+    this.stopRoll();
+    this.rollPointerDown = false;
+    this.rollLatched = false;
+    if (this.state.extInput) {
+      void this.cb.audio.setExternalInput(false);
+    }
+    this.state = defaultRmxState();
+    this.pushState();
+  }
+
   /** Triggers one of the 4 X-Pad slots (0..3) in the active bank. */
   triggerPadSlot(slot: number, eventTimeMs?: number): void {
+    if (this.bypassed) return;
     const bank = this.state.xpadBankB ? BANK_B : BANK_A;
     const pad = bank[slot];
     if (!pad) return;
@@ -112,6 +144,7 @@ export class RmxPanel {
 
   /** Triggers any of the 10 voices directly through the RMX X-Pad synth & overdub. */
   triggerVoicePad(voice: VoiceId, accent = true, eventTimeMs?: number): void {
+    if (this.bypassed) return;
     this.state.xpadVoice = voice;
     this.firePadHit(accent, eventTimeMs);
     this.pushState(eventTimeMs);
@@ -120,7 +153,7 @@ export class RmxPanel {
   /** Engages or releases the spring-loaded Release FX lever from keyboard shortcuts. */
   setReleaseLever(held: boolean): void {
     if (held) {
-      if (this.state.releaseHeld) return;
+      if (this.bypassed || this.state.releaseHeld) return;
       void this.cb.audio.ensureStarted().catch(() => {});
       this.state.releaseHeld = true;
       this.pushState();
@@ -234,13 +267,7 @@ export class RmxPanel {
 
     // Reset all RMX FX
     $("rmx-reset").addEventListener("click", () => {
-      this.stopRoll();
-      this.rollLatched = false;
-      if (this.state.extInput) {
-        void this.cb.audio.setExternalInput(false);
-      }
-      this.state = defaultRmxState();
-      this.pushState();
+      this.reset();
     });
 
     // External Live Stereo Input toggle (hidden in single-file build)
@@ -266,7 +293,7 @@ export class RmxPanel {
     sceneAmt.addEventListener("input", () => {
       this.state.sceneAmount = Number(sceneAmt.value);
       // If user turns up NOISE or any Scene FX while audio is idle, boot AudioContext so NOISE is audible
-      if (this.state.sceneAmount > 0.02) {
+      if (!this.bypassed && this.state.sceneAmount > 0.02) {
         void this.cb.audio.ensureStarted().catch(() => {});
       }
       this.pushState();
@@ -475,7 +502,7 @@ export class RmxPanel {
 
     const lever = $("rmx-release-lever");
     const engageLever = () => {
-      if (this.state.releaseHeld) return;
+      if (this.bypassed || this.state.releaseHeld) return;
       void this.cb.audio.ensureStarted().catch(() => {});
       this.state.releaseHeld = true;
       this.pushState();
@@ -509,6 +536,10 @@ export class RmxPanel {
 
   private startRoll(div: RollDivision, eventTimeMs?: number): void {
     this.state.xpadRollDiv = div;
+    if (this.bypassed) {
+      this.render();
+      return;
+    }
     this.state.xpadRolling = true;
     void this.cb.audio.ensureStarted().catch(() => {});
     this.pushState(eventTimeMs);
@@ -519,6 +550,7 @@ export class RmxPanel {
   }
 
   private firePadHit(accent: boolean, eventTimeMs?: number): void {
+    if (this.bypassed) return;
     const velocity = accent ? 1.0 : 0.85;
     const voice = this.state.xpadVoice;
     const pitch = this.state.xpadPitch;
@@ -530,7 +562,7 @@ export class RmxPanel {
       this.cb.onOverdubHit(voice, targetStep, accent, pitch);
     }
     void this.cb.audio.triggerRmxPad(voice, pitch, velocity, eventTimeMs).then((quantizedStep) => {
-      if (overdub && liveStep >= 0) {
+      if (overdub && liveStep >= 0 && !this.bypassed) {
         const targetStep = quantizedStep >= 0 ? quantizedStep : liveStep;
         this.cb.onOverdubHit(voice, targetStep, accent, pitch);
       }
@@ -538,7 +570,7 @@ export class RmxPanel {
   }
 
   private pushState(eventTimeMs?: number): void {
-    this.cb.audio.setRmxState(this.state, eventTimeMs);
+    this.cb.audio.setRmxState(this.bypassed ? defaultRmxState() : this.state, eventTimeMs);
     this.render();
   }
 
@@ -552,9 +584,11 @@ export class RmxPanel {
     const bank = s.xpadBankB ? BANK_B : BANK_A;
     const activePad = bank.find((p) => p.id === s.xpadVoice) ?? BANK_A[0]!;
     const qTag = s.xpadQuantize !== false ? " · QUANT" : "";
-    $("rmx-readout").textContent = s.releaseHeld
-      ? `RELEASE · ${s.releaseMode.replace("_", " ").toUpperCase()}`
-      : `${fxName} ${fxPct} · X-PAD ${activePad.label} 1/${s.xpadRollDiv}${qTag}`;
+    $("rmx-readout").textContent = this.bypassed
+      ? "BYPASSED · RMX-1000 OFF"
+      : s.releaseHeld
+        ? `RELEASE · ${s.releaseMode.replace("_", " ").toUpperCase()}`
+        : `${fxName} ${fxPct} · X-PAD ${activePad.label} 1/${s.xpadRollDiv}${qTag}`;
 
     // Scene FX buttons & sliders
     for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-scene-fx]")) {

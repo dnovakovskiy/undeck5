@@ -113,7 +113,7 @@ function buildDefaultScenes(): SceneSlot[] {
     "#38bdf8",
   ];
   return Array.from({ length: 8 }, (_, idx) => {
-    const preset = PRESETS[idx % PRESETS.length]!;
+    const preset = PRESETS[(idx + 1) % PRESETS.length]!;
     const s = preset.spec();
     // Pre-populate a 4-bar 64-step club progression with subtle Bar D turnaround on Scene slots
     s.variation = 5;
@@ -137,7 +137,12 @@ function buildDefaultScenes(): SceneSlot[] {
   });
 }
 
+export function defaultDjsSpec(): PatternSpec {
+  return cloneSpec(buildDefaultScenes()[0]!.spec);
+}
+
 export class DjsPanel {
+  private powered = false;
   private padMode: DjsPadMode = "track";
   private stripMode: DjsStripMode = "repeat";
   private liveRec = false;
@@ -159,6 +164,34 @@ export class DjsPanel {
     this.buildPadsAndSteps();
     this.bind();
     this.render();
+  }
+
+  get isPowered(): boolean {
+    return this.powered;
+  }
+
+  setPowered(on: boolean): void {
+    if (!on) this.stopActiveRoll();
+    this.powered = on;
+    this.root.dataset.machineOff = String(!on);
+    this.render();
+  }
+
+  reset(): PatternSpec {
+    this.stopActiveRoll();
+    this.scenes = buildDefaultScenes();
+    this.activeScene = 0;
+    this.padMode = "track";
+    this.stripMode = "repeat";
+    this.liveRec = false;
+    this.quantize = true;
+    this.pitchPct = 0;
+    const tempoSlider = this.root.querySelector<HTMLInputElement>("#djs-tempo-slider");
+    if (tempoSlider) tempoSlider.value = "0";
+    const clean = cloneSpec(this.scenes[0]!.spec);
+    this.baseBpm = clean.bpm;
+    this.render();
+    return clean;
   }
 
   private buildPadsAndSteps(): void {
@@ -347,6 +380,7 @@ export class DjsPanel {
   }
 
   private engageRoll(voice: VoiceId, div: RollDivision, pitchShift: number, eventTimeMs: number): void {
+    if (!this.powered) return;
     const rmx = { ...this.cb.getRmxState() };
     rmx.xpadVoice = voice;
     rmx.xpadRollDiv = div;
@@ -373,6 +407,7 @@ export class DjsPanel {
     accent: boolean,
     eventTimeMs: number,
   ): Promise<void> {
+    if (!this.powered) return;
     const prev = this.cb.getRmxState();
     if ((prev.xpadQuantize !== false) !== this.quantize) {
       this.cb.audio.setRmxState({ ...prev, xpadQuantize: this.quantize }, eventTimeMs);
@@ -386,7 +421,7 @@ export class DjsPanel {
     if ((prev.xpadQuantize !== false) !== this.quantize) {
       this.cb.audio.setRmxState(prev);
     }
-    if (this.liveRec) {
+    if (this.liveRec && this.powered) {
       const liveStep = this.cb.getPlayingStep();
       const target = stepIdx >= 0 ? stepIdx : liveStep >= 0 ? liveStep : 0;
       this.cb.onOverdubStep(voice, target, accent, pitchShift);
@@ -399,6 +434,8 @@ export class DjsPanel {
         const v = VOICES[idx]!;
         this.cb.onSelectVoice(v.id);
         void this.fireVoiceHit(v.id, 0, shiftKey, eventTimeMs);
+      } else if (!this.powered) {
+        return;
       } else if (idx === 10) {
         this.cb.onTriggerMacro("bd_accent", eventTimeMs);
       } else if (idx === 11) {
@@ -445,6 +482,7 @@ export class DjsPanel {
     }
 
     // Hot Roll / Slice mode
+    if (!this.powered) return;
     const cell = HOT_ROLL_CELLS[idx];
     if (!cell) return;
     this.activeRollPad = idx;
@@ -476,10 +514,12 @@ export class DjsPanel {
     $("djs-screen-bpm").textContent = `${clk.bpm.toFixed(1)}`;
     $("djs-screen-bar").textContent = `BAR ${barIndex}.${beatInBar} / ${totalBars}B`;
     const syncBadge = $("djs-sync-badge");
-    syncBadge.textContent = clk.following
-      ? `${clk.source.toUpperCase()} ${clk.locked ? "SYNC" : "WAIT"}`
-      : "INT MASTER";
-    syncBadge.dataset.locked = String(clk.following && clk.locked);
+    syncBadge.textContent = !this.powered
+      ? "DECK OFF"
+      : clk.following
+        ? `${clk.source.toUpperCase()} ${clk.locked ? "SYNC" : "WAIT"}`
+        : "INT MASTER";
+    syncBadge.dataset.locked = String(this.powered && clk.following && clk.locked);
 
     // 16-segment phase bar on 7" screen
     for (const seg of this.root.querySelectorAll<HTMLElement>("[data-djs-phase]")) {
