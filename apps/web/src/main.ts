@@ -50,6 +50,12 @@ import { HowToExplainer } from "./ui/how-to";
 import { formatDb, Meter } from "./ui/meter";
 import { RmxPanel } from "./ui/rmx-panel";
 import { template } from "./ui/template";
+import {
+  defaultTraktorSpec,
+  TraktorPanel,
+  type BuildupMacroId,
+  type TraktorStemId,
+} from "./ui/traktor-panel";
 import { CONTROL_LABELS, VOICES, voiceInfo, type ControlId, type VoiceId } from "./voices";
 
 // ---- environment ----
@@ -66,11 +72,13 @@ saveString("pattern", null);
 interface SavedSession {
   v: 1;
   trCode: string;
+  trkCode?: string;
   djsCode: string;
   presetId: string;
   kitId: string;
   voiceFxLevel: number;
   powerTr: boolean;
+  powerTraktor?: boolean;
   powerDjs: boolean;
   powerRmx: boolean;
   manualDeckMix: boolean;
@@ -78,6 +86,7 @@ interface SavedSession {
 
 interface HistoryEntry {
   spec: PatternSpec;
+  traktorSpec?: PatternSpec;
   djsSpec?: PatternSpec;
   djsEditBank?: BarId;
   presetId: string;
@@ -87,6 +96,7 @@ interface HistoryEntry {
   voiceFx?: VoiceFxMap;
   voiceFxLevel?: number;
   powerTr?: boolean;
+  powerTraktor?: boolean;
   powerDjs?: boolean;
   powerRmx?: boolean;
   manualDeckMix?: boolean;
@@ -106,11 +116,13 @@ function initialEditBar(s: PatternSpec): BarId {
 
 function loadInitialSession(): {
   tr: PatternSpec;
+  trk: PatternSpec;
   djs: PatternSpec;
   presetId?: string;
   kitId?: string;
   vfxLevel: number;
   pTr: boolean;
+  pTrk: boolean;
   pDjs: boolean;
   pRmx: boolean;
   manualMix: boolean;
@@ -125,14 +137,19 @@ function loadInitialSession(): {
   const hadInitialHash = rawHash.length > 1;
   const fromHash = hadInitialHash ? decodeHash(rawHash) : null;
   if (fromHash) {
+    const trk = defaultTraktorSpec();
+    trk.bpm = fromHash.bpm;
+    trk.render = { ...fromHash.render };
     const djs = defaultDjsSpec();
     djs.bpm = fromHash.bpm;
     djs.render = { ...fromHash.render };
     return {
       tr: fromHash,
+      trk,
       djs,
       vfxLevel: 0.72,
       pTr: true,
+      pTrk: false,
       pDjs: false,
       pRmx: true,
       manualMix: false,
@@ -146,16 +163,21 @@ function loadInitialSession(): {
         const parsed = JSON.parse(rawSaved) as Partial<SavedSession>;
         const tr = parsed.trCode ? decodeCode(parsed.trCode) : null;
         if (tr) {
+          const trk = (parsed.trkCode ? decodeCode(parsed.trkCode) : null) ?? defaultTraktorSpec();
+          trk.bpm = tr.bpm;
+          trk.render = { ...tr.render };
           const djs = (parsed.djsCode ? decodeCode(parsed.djsCode) : null) ?? defaultDjsSpec();
           djs.bpm = tr.bpm;
           djs.render = { ...tr.render };
           return {
             tr,
+            trk,
             djs,
             presetId: typeof parsed.presetId === "string" ? parsed.presetId : undefined,
             kitId: typeof parsed.kitId === "string" ? parsed.kitId : undefined,
             vfxLevel: typeof parsed.voiceFxLevel === "number" ? parsed.voiceFxLevel : 0.72,
             pTr: parsed.powerTr !== false,
+            pTrk: Boolean(parsed.powerTraktor),
             pDjs: Boolean(parsed.powerDjs),
             pRmx: parsed.powerRmx !== false,
             manualMix: Boolean(parsed.manualDeckMix),
@@ -168,14 +190,19 @@ function loadInitialSession(): {
     }
   }
   const tr = DEFAULT_PRESET.spec();
+  const trk = defaultTraktorSpec();
+  trk.bpm = tr.bpm;
+  trk.render = { ...tr.render };
   const djs = defaultDjsSpec();
   djs.bpm = tr.bpm;
   djs.render = { ...tr.render };
   return {
     tr,
+    trk,
     djs,
     vfxLevel: 0.72,
     pTr: true,
+    pTrk: false,
     pDjs: false,
     pRmx: true,
     manualMix: false,
@@ -185,6 +212,7 @@ function loadInitialSession(): {
 
 const startup = loadInitialSession();
 let spec: PatternSpec = startup.tr;
+let traktorSpec: PatternSpec = startup.trk;
 let djsSpec: PatternSpec = startup.djs;
 let activePresetId = startup.presetId ?? findMatchingPresetId(spec);
 let activeKitId = startup.kitId ?? PRESETS.find((p) => p.id === activePresetId)?.kitId ?? "";
@@ -199,6 +227,7 @@ let djsEditBank: BarId = initialEditBar(djsSpec);
 let followBars = false;
 let mixerOpen = false;
 let powerTr = startup.pTr;
+let powerTraktor = startup.pTrk;
 let powerDjs = startup.pDjs;
 let powerRmx = startup.pRmx;
 let manualDeckMix = startup.manualMix;
@@ -273,9 +302,11 @@ const undoBtn = $<HTMLButtonElement>("undo");
 const saveBtn = $<HTMLButtonElement>("save-btn");
 const resetBtn = $<HTMLButtonElement>("reset-btn");
 const powerTrBtn = $<HTMLButtonElement>("power-tr");
+const powerTrkBtn = $<HTMLButtonElement>("power-traktor");
 const powerDjsBtn = $<HTMLButtonElement>("power-djs");
 const powerRmxBtn = $<HTMLButtonElement>("power-rmx");
 const panelPowerTrBtn = $<HTMLButtonElement>("panel-power-tr");
+const panelPowerTrkBtn = $<HTMLButtonElement>("panel-power-traktor");
 const panelPowerDjsBtn = $<HTMLButtonElement>("panel-power-djs");
 const panelPowerRmxBtn = $<HTMLButtonElement>("panel-power-rmx");
 const gain = $<HTMLInputElement>("gain");
@@ -346,9 +377,9 @@ const audio = new AudioEngine({
   onStatus: (status) => onEngineStatus(status),
 });
 
-type SurfaceMode = "sequencer" | "djs" | "rmx" | "booth";
+type SurfaceMode = "sequencer" | "traktor" | "djs" | "rmx" | "booth";
 let surfaceMode: SurfaceMode = "sequencer";
-let boothLeftDeck: "sequencer" | "djs" = "sequencer";
+let boothLeftDeck: "sequencer" | "traktor" | "djs" = "sequencer";
 app.dataset.surface = surfaceMode;
 app.dataset.boothDeck = boothLeftDeck;
 
@@ -356,8 +387,14 @@ function isDjsFocused(): boolean {
   return surfaceMode === "djs" || (surfaceMode === "booth" && boothLeftDeck === "djs");
 }
 
+function isTraktorFocused(): boolean {
+  return surfaceMode === "traktor" || (surfaceMode === "booth" && boothLeftDeck === "traktor");
+}
+
 function focusedSpec(): PatternSpec {
-  return isDjsFocused() ? djsSpec : spec;
+  if (isDjsFocused()) return djsSpec;
+  if (isTraktorFocused()) return traktorSpec;
+  return spec;
 }
 
 function toggleVoiceFx(voice: VoiceId, fx: VoiceFxKind): void {
@@ -709,18 +746,38 @@ const djs = new DjsPanel($("djs-panel"), {
   },
 });
 
+const traktor = new TraktorPanel($("traktor-panel"), {
+  audio,
+  getSpec: () => traktorSpec,
+  getPlayingStep: () => playingStep,
+  isPlaying: () => audio.playing,
+  onCommitSpec(next, reason) {
+    checkpoint(reason ?? "trk-edit");
+    traktorSpec = next;
+    commit();
+  },
+  getBaseRmxState: () => rmx.current,
+  isRmxBypassed: () => rmx.isBypassed,
+  onSay: (msg) => say(msg),
+});
+
 const howTo = new HowToExplainer(app);
 
 // ---- surface mode & individual machine power switches ----
 
 function renderMachinePowerControls(): void {
   powerTrBtn.setAttribute("aria-pressed", String(powerTr));
+  powerTrkBtn.setAttribute("aria-pressed", String(powerTraktor));
   powerDjsBtn.setAttribute("aria-pressed", String(powerDjs));
   powerRmxBtn.setAttribute("aria-pressed", String(powerRmx));
 
   panelPowerTrBtn.setAttribute("aria-pressed", String(powerTr));
   $("panel-power-tr-label").textContent = powerTr ? "ON AIR" : "OFF";
   $("grid-panel").dataset.machineOff = String(!powerTr);
+
+  panelPowerTrkBtn.setAttribute("aria-pressed", String(powerTraktor));
+  $("panel-power-trk-label").textContent = powerTraktor ? "ON AIR" : "OFF";
+  traktor.setPowered(powerTraktor);
 
   panelPowerDjsBtn.setAttribute("aria-pressed", String(powerDjs));
   $("panel-power-djs-label").textContent = powerDjs ? "ON AIR" : "OFF";
@@ -735,6 +792,7 @@ function renderMachinePowerControls(): void {
   }
 
   app.dataset.powerTr = String(powerTr);
+  app.dataset.powerTraktor = String(powerTraktor);
   app.dataset.powerDjs = String(powerDjs);
   app.dataset.powerRmx = String(powerRmx);
 }
@@ -760,26 +818,37 @@ function setSurfaceMode(mode: SurfaceMode): void {
   app.dataset.surface = mode;
   app.dataset.boothDeck = boothLeftDeck;
   $("mode-seq").setAttribute("aria-pressed", String(mode === "sequencer"));
+  $("mode-traktor").setAttribute("aria-pressed", String(mode === "traktor"));
   $("mode-djs").setAttribute("aria-pressed", String(mode === "djs"));
   $("mode-rmx").setAttribute("aria-pressed", String(mode === "rmx"));
   $("mode-booth").setAttribute("aria-pressed", String(mode === "booth"));
   $("rmx-panel").hidden = mode !== "rmx" && mode !== "booth";
+  $("traktor-panel").hidden = !(mode === "traktor" || (mode === "booth" && boothLeftDeck === "traktor"));
   $("djs-panel").hidden = !(mode === "djs" || (mode === "booth" && boothLeftDeck === "djs"));
   $("grid-panel").hidden = !(mode === "sequencer" || (mode === "booth" && boothLeftDeck === "sequencer"));
-  $("voice-panel").hidden = mode === "rmx";
+  $("voice-panel").hidden = mode === "rmx" || mode === "traktor" || (mode === "booth" && boothLeftDeck === "traktor");
   if (mode !== "booth") $("share-panel").classList.remove("open-in-booth");
 
   // Auto-solo the active drum deck unless the user manually toggled machine switches to mix/mute them
   if (!manualDeckMix) {
-    if (mode === "djs" || (mode === "booth" && boothLeftDeck === "djs")) {
-      if (powerTr || !powerDjs) {
+    if (mode === "traktor" || (mode === "booth" && boothLeftDeck === "traktor")) {
+      if (powerTr || powerDjs || !powerTraktor) {
+        powerTraktor = true;
+        powerTr = false;
+        powerDjs = false;
+        pushEnginePattern();
+      }
+    } else if (mode === "djs" || (mode === "booth" && boothLeftDeck === "djs")) {
+      if (powerTr || powerTraktor || !powerDjs) {
         powerDjs = true;
         powerTr = false;
+        powerTraktor = false;
         pushEnginePattern();
       }
     } else if (mode === "sequencer" || (mode === "booth" && boothLeftDeck === "sequencer")) {
-      if (!powerTr || powerDjs) {
+      if (!powerTr || powerDjs || powerTraktor) {
         powerTr = true;
+        powerTraktor = false;
         powerDjs = false;
         pushEnginePattern();
       }
@@ -788,14 +857,24 @@ function setSurfaceMode(mode: SurfaceMode): void {
   renderMachinePowerControls();
   renderVoicePanel();
   renderTransportFeel();
-  howTo.setGuideMode(mode);
+  howTo.setGuideMode(mode, boothLeftDeck);
   djs.render();
+  traktor.render();
 }
 
 $("mode-seq").addEventListener("click", () => setSurfaceMode("sequencer"));
+$("mode-traktor").addEventListener("click", () => setSurfaceMode("traktor"));
 $("mode-djs").addEventListener("click", () => setSurfaceMode("djs"));
 $("mode-rmx").addEventListener("click", () => setSurfaceMode("rmx"));
 $("mode-booth").addEventListener("click", () => setSurfaceMode("booth"));
+$("booth-swap-trk").addEventListener("click", () => {
+  boothLeftDeck = "traktor";
+  setSurfaceMode("booth");
+});
+$("booth-swap-tr-from-trk").addEventListener("click", () => {
+  boothLeftDeck = "sequencer";
+  setSurfaceMode("booth");
+});
 $("booth-swap-djs").addEventListener("click", () => {
   boothLeftDeck = "djs";
   setSurfaceMode("booth");
@@ -808,6 +887,13 @@ $("booth-swap-tr").addEventListener("click", () => {
 function toggleTrPower(): void {
   checkpoint("power-tr");
   powerTr = !powerTr;
+  manualDeckMix = true;
+  commit();
+}
+
+function toggleTraktorPower(): void {
+  checkpoint("power-traktor");
+  powerTraktor = !powerTraktor;
   manualDeckMix = true;
   commit();
 }
@@ -828,6 +914,8 @@ function toggleRmxPower(): void {
 
 powerTrBtn.addEventListener("click", toggleTrPower);
 panelPowerTrBtn.addEventListener("click", toggleTrPower);
+powerTrkBtn.addEventListener("click", toggleTraktorPower);
+panelPowerTrkBtn.addEventListener("click", toggleTraktorPower);
 powerDjsBtn.addEventListener("click", toggleDjsPower);
 panelPowerDjsBtn.addEventListener("click", toggleDjsPower);
 powerRmxBtn.addEventListener("click", toggleRmxPower);
@@ -1155,6 +1243,7 @@ function renderControls(): void {
   rmx.render();
   djs.syncBaseBpm(spec.bpm);
   djs.render();
+  traktor.render();
   if (!clock.following && !bpmEditing) bpmInput.value = String(spec.bpm);
   renderTransportFeel();
   const db = gainDb(spec.render.output_gain);
@@ -1242,6 +1331,7 @@ function renderPlayhead(): void {
     );
   }
   if (!($("djs-panel").hidden)) djs.render();
+  if (!($("traktor-panel").hidden)) traktor.render();
 }
 
 const MODE_LABEL: Record<EngineMode, string> = {
@@ -1316,9 +1406,12 @@ function audibleStepsForFourBarSlot(
 }
 
 function buildEngineSpec(): PatternSpec {
-  if (powerTr && !powerDjs) return spec;
-  if (!powerTr && powerDjs) return djsSpec;
-  if (!powerTr && !powerDjs) {
+  const activeDecks: PatternSpec[] = [];
+  if (powerTr) activeDecks.push(spec);
+  if (powerTraktor) activeDecks.push(traktorSpec);
+  if (powerDjs) activeDecks.push(djsSpec);
+
+  if (activeDecks.length === 0) {
     const silent = cloneSpec(spec);
     silent.variation = 0;
     silent.fill = false;
@@ -1335,22 +1428,28 @@ function buildEngineSpec(): PatternSpec {
     return silent;
   }
 
-  // Both TR Drums and Pioneer DJS-1000 are ON AIR: merge both 4-bar streams sample-accurately
-  const merged = cloneSpec(spec);
+  if (activeDecks.length === 1) {
+    return activeDecks[0]!;
+  }
+
+  // Multiple drum machines are ON AIR: merge all active 4-bar streams sample-accurately
+  const merged = cloneSpec(activeDecks[0]!);
   merged.variation = 5;
   merged.last_step = STEP_COUNT;
-  const trAnySolo = VOICES.some((v) => spec.voices[v.id].solo);
-  const djsAnySolo = VOICES.some((v) => djsSpec.voices[v.id].solo);
+  const soloFlags = activeDecks.map((d) => VOICES.some((v) => d.voices[v.id].solo));
 
   for (const v of VOICES) {
-    const trBars = BAR_IDS.map((b) => audibleStepsForFourBarSlot(spec, v.id, b, trAnySolo));
-    const djsBars = BAR_IDS.map((b) => audibleStepsForFourBarSlot(djsSpec, v.id, b, djsAnySolo));
+    const deckBars = activeDecks.map((d, dIdx) =>
+      BAR_IDS.map((b) => audibleStepsForFourBarSlot(d, v.id, b, soloFlags[dIdx]!)),
+    );
     const combinedBars = BAR_IDS.map((_, bIdx) => {
-      const ta = trBars[bIdx]!;
-      const da = djsBars[bIdx]!;
       let s = "";
       for (let i = 0; i < STEP_COUNT; i++) {
-        s += mergeStepChar(ta[i] ?? "-", da[i] ?? "-");
+        let ch: StepChar = "-";
+        for (let dIdx = 0; dIdx < deckBars.length; dIdx++) {
+          ch = mergeStepChar(ch, deckBars[dIdx]![bIdx]![i] ?? "-");
+        }
+        s += ch;
       }
       return s;
     });
@@ -1362,18 +1461,17 @@ function buildEngineSpec(): PatternSpec {
     mv.mute = false;
     mv.solo = false;
 
-    const trHasHits = trBars.some((b) => b !== EMPTY_STEPS);
-    const djsHasHits = djsBars.some((b) => b !== EMPTY_STEPS);
-    if (!trHasHits && djsHasHits) {
-      const dv = djsSpec.voices[v.id];
-      mv.tune = dv.tune;
-      mv.decay = dv.decay;
-      mv.tone = dv.tone;
-      mv.snappy = dv.snappy;
-      mv.level = dv.level;
-      mv.echo_send = dv.echo_send;
-      mv.reverb_send = dv.reverb_send;
-      mv.filter_send = dv.filter_send;
+    const firstWithHits = deckBars.findIndex((bars) => bars.some((b) => b !== EMPTY_STEPS));
+    if (firstWithHits > 0) {
+      const src = activeDecks[firstWithHits]!.voices[v.id];
+      mv.tune = src.tune;
+      mv.decay = src.decay;
+      mv.tone = src.tone;
+      mv.snappy = src.snappy;
+      mv.level = src.level;
+      mv.echo_send = src.echo_send;
+      mv.reverb_send = src.reverb_send;
+      mv.filter_send = src.filter_send;
     }
   }
   return sanitize(merged);
@@ -1382,7 +1480,7 @@ function buildEngineSpec(): PatternSpec {
 function pushEnginePattern(): void {
   const engineSpec = buildEngineSpec();
   audio.setPattern(specBytes(engineSpec));
-  audio.setKit(powerTr || !powerDjs ? activeKitId : "", engineSpec);
+  audio.setKit(powerTr ? activeKitId : "", engineSpec);
 }
 
 function buildShareUrl(code: string): string {
@@ -1402,6 +1500,9 @@ interface CommitOptions {
 function commit(opts?: CommitOptions): void {
   syncFxIntoSpec(spec);
   spec = sanitize(spec);
+  traktorSpec.bpm = spec.bpm;
+  traktorSpec.render = { ...spec.render };
+  traktorSpec = sanitize(traktorSpec);
   djsSpec.bpm = spec.bpm;
   djsSpec.render = { ...spec.render };
   djsSpec = sanitize(djsSpec);
@@ -1412,7 +1513,13 @@ function commit(opts?: CommitOptions): void {
   renderControls();
   pushEnginePattern();
   audio.setVoiceFxLevel(voiceFxLevel);
-  const code = encodeCode(!powerTr && powerDjs ? djsSpec : spec);
+  const code = encodeCode(
+    !powerTr && powerTraktor && !powerDjs
+      ? traktorSpec
+      : !powerTr && powerDjs
+        ? djsSpec
+        : spec,
+  );
   shareCode.value = code;
   if (opts?.skipUrlHash) {
     clearTimeout(urlTimer);
@@ -1453,6 +1560,7 @@ function writeUrl(): void {
 function snapshotState(): string {
   const entry: HistoryEntry = {
     spec,
+    traktorSpec,
     djsSpec,
     djsEditBank,
     presetId: activePresetId,
@@ -1462,6 +1570,7 @@ function snapshotState(): string {
     voiceFx: cloneVoiceFxMap(voiceFx),
     voiceFxLevel,
     powerTr,
+    powerTraktor,
     powerDjs,
     powerRmx,
     manualDeckMix,
@@ -1473,6 +1582,9 @@ function restoreSnapshot(raw: string): void {
   const parsed = JSON.parse(raw) as HistoryEntry | PatternSpec;
   if (parsed && typeof parsed === "object" && "spec" in parsed) {
     spec = sanitize(parsed.spec);
+    if (parsed.traktorSpec) {
+      traktorSpec = sanitize(parsed.traktorSpec);
+    }
     if (parsed.djsSpec) {
       djsSpec = sanitize(parsed.djsSpec);
       djsEditBank = parsed.djsEditBank ?? initialEditBar(djsSpec);
@@ -1484,6 +1596,7 @@ function restoreSnapshot(raw: string): void {
     voiceFx = parsed.voiceFx ? cloneVoiceFxMap(parsed.voiceFx) : defaultVoiceFxMap();
     voiceFxLevel = typeof parsed.voiceFxLevel === "number" ? parsed.voiceFxLevel : 0.72;
     if (typeof parsed.powerTr === "boolean") powerTr = parsed.powerTr;
+    if (typeof parsed.powerTraktor === "boolean") powerTraktor = parsed.powerTraktor;
     if (typeof parsed.powerDjs === "boolean") powerDjs = parsed.powerDjs;
     if (typeof parsed.powerRmx === "boolean") {
       powerRmx = parsed.powerRmx;
@@ -1799,6 +1912,10 @@ $("clear").addEventListener("click", () => {
     for (const v of VOICES) {
       setStepsForBar(djsSpec.voices[v.id], djsEditBank, EMPTY_STEPS);
     }
+  } else if (isTraktorFocused()) {
+    for (const v of VOICES) {
+      traktorSpec.voices[v.id].steps = EMPTY_STEPS;
+    }
   } else {
     ensureBarsPopulated(editBank);
     for (const v of VOICES) {
@@ -1813,17 +1930,22 @@ undoBtn.addEventListener("click", undo);
 function saveSession(): void {
   syncFxIntoSpec(spec);
   spec = sanitize(spec);
+  traktorSpec.bpm = spec.bpm;
+  traktorSpec.render = { ...spec.render };
+  traktorSpec = sanitize(traktorSpec);
   djsSpec.bpm = spec.bpm;
   djsSpec.render = { ...spec.render };
   djsSpec = sanitize(djsSpec);
   const payload: SavedSession = {
     v: 1,
     trCode: encodeCode(spec),
+    trkCode: encodeCode(traktorSpec),
     djsCode: encodeCode(djsSpec),
     presetId: activePresetId,
     kitId: activeKitId,
     voiceFxLevel,
     powerTr,
+    powerTraktor,
     powerDjs,
     powerRmx,
     manualDeckMix,
@@ -1855,6 +1977,10 @@ function resetAllMachines(): void {
   flamMode = false;
   editBank = "a";
 
+  traktorSpec = traktor.reset();
+  traktorSpec.bpm = spec.bpm;
+  traktorSpec.render = { ...spec.render };
+
   djsSpec = djs.reset();
   djsSpec.bpm = spec.bpm;
   djsSpec.render = { ...spec.render };
@@ -1868,8 +1994,14 @@ function resetAllMachines(): void {
   if (isDjsFocused()) {
     powerDjs = true;
     powerTr = false;
+    powerTraktor = false;
+  } else if (isTraktorFocused()) {
+    powerTraktor = true;
+    powerTr = false;
+    powerDjs = false;
   } else {
     powerTr = true;
+    powerTraktor = false;
     powerDjs = false;
   }
 
@@ -2038,6 +2170,40 @@ const STEP_KEY_CODES = [
 
 const KIT_KEY_CODES = ["KeyY", "KeyU", "KeyI", "KeyO", "KeyP"] as const;
 const RMX_ROLL_DIVS = [1, 2, 4, 8, 16, 32] as const;
+const DJS_PAD_CODES = [
+  "Digit1",
+  "Digit2",
+  "Digit3",
+  "Digit4",
+  "KeyQ",
+  "KeyW",
+  "KeyE",
+  "KeyR",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+  "KeyF",
+  "KeyZ",
+  "KeyX",
+  "KeyC",
+  "KeyV",
+] as const;
+const TRAKTOR_PAT_CODES = [
+  "Digit1",
+  "Digit2",
+  "Digit3",
+  "Digit4",
+  "Digit5",
+  "Digit6",
+  "Digit7",
+  "Digit8",
+  "Digit9",
+  "Digit0",
+  "Minus",
+  "Equal",
+] as const;
+const TRAKTOR_STEM_ORDER: readonly TraktorStemId[] = ["sub", "snare", "hats", "perc"];
+let activeTrkStemIdx = 0;
 
 function applyPresetByIndex(idx: number): void {
   const wrapped = ((idx % PRESETS.length) + PRESETS.length) % PRESETS.length;
@@ -2061,6 +2227,10 @@ window.addEventListener("keydown", (e) => {
       howTo.close();
       return;
     }
+    if (traktor.isBuildupActive) {
+      traktor.releaseIntoDrop();
+      return;
+    }
     rmx.setReleaseLever(false);
     return;
   }
@@ -2068,12 +2238,10 @@ window.addEventListener("keydown", (e) => {
 
   if (e.code === "Slash" && !mod && !e.altKey) {
     e.preventDefault();
-    if (!e.repeat) howTo.toggle(surfaceMode);
+    if (!e.repeat) howTo.toggle(surfaceMode, boothLeftDeck);
     return;
   }
   if (e.code === "Space" && !mod && !e.altKey) {
-    // Space is play/stop everywhere, also on a focused button (Enter
-    // activates buttons).
     e.preventDefault();
     if (!e.repeat) {
       howTo.notifyKeyDown("Space", "Space → Play / Stop Transport");
@@ -2093,6 +2261,28 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 
+  // Global Ctrl + Q/W/E: Quick RMX-1000 Isolator Kills from any deck
+  if (e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+    if (e.code === "KeyQ") {
+      e.preventDefault();
+      const on = rmx.toggleKill("low");
+      howTo.notifyKeyDown(e.code, `Ctrl+Q → RMX Kill Low ${on ? "ON" : "OFF"}`);
+      return;
+    }
+    if (e.code === "KeyW") {
+      e.preventDefault();
+      const on = rmx.toggleKill("mid");
+      howTo.notifyKeyDown(e.code, `Ctrl+W → RMX Kill Mid ${on ? "ON" : "OFF"}`);
+      return;
+    }
+    if (e.code === "KeyE") {
+      e.preventDefault();
+      const on = rmx.toggleKill("high");
+      howTo.notifyKeyDown(e.code, `Ctrl+E → RMX Kill High ${on ? "ON" : "OFF"}`);
+      return;
+    }
+  }
+
   // Ctrl + 1..0: Toggle Dub Echo send on Voice 1..0 directly
   const vIdx = VOICE_DIGIT_CODES.indexOf(e.code as (typeof VOICE_DIGIT_CODES)[number]);
   if (e.ctrlKey && !e.metaKey && !e.altKey && vIdx >= 0 && !e.repeat) {
@@ -2109,25 +2299,674 @@ window.addEventListener("keydown", (e) => {
 
   if (mod) return;
 
+  // Global Surface Cycle (` / Shift+`), Tempo ([ / ]), Phase Nudge (; / '), and Re-sync (L)
+  if (e.code === "Backquote" && !e.repeat) {
+    e.preventDefault();
+    if (e.shiftKey) {
+      setSurfaceMode(surfaceMode === "booth" ? "sequencer" : "booth");
+    } else {
+      const nextMode: SurfaceMode =
+        surfaceMode === "sequencer"
+          ? "traktor"
+          : surfaceMode === "traktor"
+            ? "djs"
+            : surfaceMode === "djs"
+              ? "rmx"
+              : "sequencer";
+      setSurfaceMode(nextMode);
+    }
+    const label =
+      surfaceMode === "booth"
+        ? "Booth Split"
+        : surfaceMode === "traktor"
+          ? "Pattern Player"
+          : surfaceMode === "djs"
+            ? "DJS-1000 Deck"
+            : surfaceMode === "rmx"
+              ? "RMX-1000 Station"
+              : "Step Sequencer";
+    howTo.notifyKeyDown(e.code, `Surface → ${label}`);
+    return;
+  }
+  if (e.code === "BracketLeft" && !e.altKey) {
+    if (!clock.following) {
+      e.preventDefault();
+      setBpm(e.shiftKey ? spec.bpm - 0.1 : Math.round(spec.bpm) - 1, "bpm");
+      howTo.notifyKeyDown(e.code, `[ → BPM ${spec.bpm}`);
+    }
+    return;
+  }
+  if (e.code === "BracketRight" && !e.altKey) {
+    if (!clock.following) {
+      e.preventDefault();
+      setBpm(e.shiftKey ? spec.bpm + 0.1 : Math.round(spec.bpm) + 1, "bpm");
+      howTo.notifyKeyDown(e.code, `] → BPM ${spec.bpm}`);
+    }
+    return;
+  }
+  if (e.code === "Semicolon" && !e.altKey) {
+    e.preventDefault();
+    $<HTMLButtonElement>("nudge-down").dispatchEvent(
+      new MouseEvent("click", { shiftKey: e.shiftKey }),
+    );
+    howTo.notifyKeyDown(e.code, "; → Phase Nudge Earlier");
+    return;
+  }
+  if (e.code === "Quote" && !e.altKey) {
+    e.preventDefault();
+    $<HTMLButtonElement>("nudge-up").dispatchEvent(
+      new MouseEvent("click", { shiftKey: e.shiftKey }),
+    );
+    howTo.notifyKeyDown(e.code, "' → Phase Nudge Later");
+    return;
+  }
+  if (e.code === "KeyL" && !e.altKey && !e.repeat) {
+    e.preventDefault();
+    $<HTMLButtonElement>("resync").click();
+    howTo.notifyKeyDown(e.code, "L → Re-sync Bar Phase");
+    return;
+  }
+
+  // =========================================================================
+  // DEVICE A: PIONEER DJS-1000 DECK HOTKEYS
+  // =========================================================================
+  if (isDjsFocused()) {
+    if (e.repeat) return;
+
+    // Option + 1..8 -> Direct Scene S1..S8 jump
+    if (e.altKey && vIdx >= 0 && vIdx < 8) {
+      e.preventDefault();
+      const sName = djs.selectScene(vIdx);
+      howTo.notifyKeyDown(e.code, `⌥+${vIdx + 1} → DJS ${sName}`);
+      return;
+    }
+    if (e.altKey) return;
+
+    // Left-hand 4x4 Performance Pad Matrix: 1..4 / Q..R / A..F / Z..V -> Pads 1..16
+    const padIdx = DJS_PAD_CODES.indexOf(e.code as (typeof DJS_PAD_CODES)[number]);
+    if (padIdx >= 0) {
+      e.preventDefault();
+      if (!powerDjs) {
+        powerDjs = true;
+        commit();
+      }
+      const desc = djs.triggerPadFromKey(padIdx, e.shiftKey, e.timeStamp);
+      howTo.notifyKeyDown(e.code, desc);
+      return;
+    }
+
+    switch (e.code) {
+      case "Digit5":
+        e.preventDefault();
+        djs.setPadMode("track");
+        howTo.notifyKeyDown(e.code, "5 → DJS Mode: TRACK PLAY");
+        return;
+      case "Digit6":
+        e.preventDefault();
+        djs.setPadMode("mute");
+        howTo.notifyKeyDown(e.code, "6 → DJS Mode: MUTE / SOLO");
+        return;
+      case "Digit7":
+        e.preventDefault();
+        djs.setPadMode("scale");
+        howTo.notifyKeyDown(e.code, "7 → DJS Mode: 16-PAD PITCH");
+        return;
+      case "Digit8":
+        e.preventDefault();
+        djs.setPadMode("slice");
+        howTo.notifyKeyDown(e.code, "8 → DJS Mode: HOT ROLL");
+        return;
+      case "Digit9": {
+        e.preventDefault();
+        const sName = djs.stepScene(-1);
+        howTo.notifyKeyDown(e.code, `9 → Prev Scene (${sName})`);
+        return;
+      }
+      case "Digit0": {
+        e.preventDefault();
+        const sName = djs.stepScene(1);
+        howTo.notifyKeyDown(e.code, `0 → Next Scene (${sName})`);
+        return;
+      }
+      case "KeyG":
+        e.preventDefault();
+        if (!powerDjs) {
+          powerDjs = true;
+          commit();
+        }
+        howTo.notifyKeyDown(e.code, djs.holdStripDivFromKey(4, e.timeStamp));
+        return;
+      case "KeyH":
+        e.preventDefault();
+        if (!powerDjs) {
+          powerDjs = true;
+          commit();
+        }
+        howTo.notifyKeyDown(e.code, djs.holdStripDivFromKey(8, e.timeStamp));
+        return;
+      case "KeyJ":
+        e.preventDefault();
+        if (!powerDjs) {
+          powerDjs = true;
+          commit();
+        }
+        howTo.notifyKeyDown(e.code, djs.holdStripDivFromKey(16, e.timeStamp));
+        return;
+      case "KeyK":
+        e.preventDefault();
+        if (!powerDjs) {
+          powerDjs = true;
+          commit();
+        }
+        howTo.notifyKeyDown(e.code, djs.holdStripDivFromKey(32, e.timeStamp));
+        return;
+      case "KeyT": {
+        e.preventDefault();
+        const sm = djs.toggleStripMode();
+        howTo.notifyKeyDown(e.code, `T → Touch Strip Mode: ${sm.toUpperCase()}`);
+        return;
+      }
+      case "KeyY": {
+        e.preventDefault();
+        const q = djs.toggleQuantize();
+        howTo.notifyKeyDown(e.code, `Y → DJS Quantize ${q ? "ON" : "OFF"}`);
+        return;
+      }
+      case "KeyU": {
+        e.preventDefault();
+        const rec = djs.toggleLiveRec();
+        howTo.notifyKeyDown(e.code, `U → DJS Live Rec ${rec ? "ARMED" : "OFF"}`);
+        return;
+      }
+      case "KeyI": {
+        e.preventDefault();
+        checkpoint("djs-bar");
+        const nextIdx = (BAR_IDS.indexOf(djsEditBank) + 1) % BAR_IDS.length;
+        djsEditBank = BAR_IDS[nextIdx]!;
+        if (djsSpec.variation !== 2 && djsSpec.variation !== 5) {
+          djsSpec.variation = (
+            djsEditBank === "a" ? 0 : djsEditBank === "b" ? 1 : djsEditBank === "c" ? 3 : 4
+          ) as VariationCode;
+        }
+        commit();
+        howTo.notifyKeyDown(e.code, `I → DJS Bar ${djsEditBank.toUpperCase()}`);
+        return;
+      }
+      case "KeyO": {
+        e.preventDefault();
+        checkpoint("djs-chain");
+        djsSpec.variation = djsSpec.variation === 5 ? 0 : djsSpec.variation === 2 ? 5 : 2;
+        if (djsSpec.variation !== 0) ensureSpecBarsPopulated(djsSpec, "d");
+        commit();
+        const modeTxt =
+          djsSpec.variation === 5 ? "A–D (64 Steps)" : djsSpec.variation === 2 ? "A+B (32 Steps)" : "1-Bar Loop";
+        howTo.notifyKeyDown(e.code, `O → DJS Chain: ${modeTxt}`);
+        return;
+      }
+      case "KeyP": {
+        e.preventDefault();
+        const cap = djs.captureScene();
+        say(`Captured ${cap} on DJS-1000.`);
+        howTo.notifyKeyDown(e.code, `P → Captured ${cap}`);
+        return;
+      }
+      case "KeyB":
+        e.preventDefault();
+        $<HTMLButtonElement>("djs-beat-sync").click();
+        howTo.notifyKeyDown(e.code, "B → DJS Beat Sync");
+        return;
+      case "KeyN":
+        e.preventDefault();
+        $<HTMLButtonElement>("djs-cue").click();
+        howTo.notifyKeyDown(e.code, "N → DJS Cue (Beat 1.1)");
+        return;
+      case "KeyM":
+        e.preventDefault();
+        checkpoint();
+        djsSpec.voices[selected].mute = !djsSpec.voices[selected].mute;
+        commit();
+        howTo.notifyKeyDown(
+          e.code,
+          `M → DJS ${selected.toUpperCase()} ${djsSpec.voices[selected].mute ? "MUTED" : "ON"}`,
+        );
+        return;
+      case "Comma": {
+        e.preventDefault();
+        checkpoint();
+        const nextSolo = !djsSpec.voices[selected].solo;
+        for (const v of VOICES) djsSpec.voices[v.id].solo = false;
+        djsSpec.voices[selected].solo = nextSolo;
+        commit();
+        howTo.notifyKeyDown(e.code, `, → DJS ${selected.toUpperCase()} Solo ${nextSolo ? "ON" : "OFF"}`);
+        return;
+      }
+      case "Period":
+        e.preventDefault();
+        rmx.setReleaseLever(true);
+        howTo.notifyKeyDown(e.code, "Hold . → RMX-1000 Release FX Lever");
+        return;
+      case "Minus":
+        if (!clock.following) {
+          e.preventDefault();
+          setBpm(e.shiftKey ? spec.bpm - 0.1 : Math.round(spec.bpm) - 1, "bpm");
+          howTo.notifyKeyDown(e.code, `- → BPM ${spec.bpm}`);
+        }
+        return;
+      case "Equal":
+        if (!clock.following) {
+          e.preventDefault();
+          setBpm(e.shiftKey ? spec.bpm + 0.1 : Math.round(spec.bpm) + 1, "bpm");
+          howTo.notifyKeyDown(e.code, `= → BPM ${spec.bpm}`);
+        }
+        return;
+      case "Backspace":
+        e.preventDefault();
+        checkpoint();
+        ensureSpecBarsPopulated(djsSpec, djsEditBank);
+        if (e.shiftKey) {
+          for (const v of VOICES) setStepsForBar(djsSpec.voices[v.id], djsEditBank, EMPTY_STEPS);
+          howTo.notifyKeyDown(e.code, "Shift+Delete → Clear All DJS Tracks");
+        } else {
+          setStepsForBar(djsSpec.voices[selected], djsEditBank, EMPTY_STEPS);
+          howTo.notifyKeyDown(e.code, `Delete → Clear DJS ${selected.toUpperCase()}`);
+        }
+        commit();
+        return;
+    }
+    return;
+  }
+
+  // =========================================================================
+  // DEVICE B: PIONEER RMX-1000 REMIX STATION HOTKEYS
+  // =========================================================================
+  if (surfaceMode === "rmx") {
+    if (e.repeat) return;
+    if (e.altKey) return;
+
+    // 1..4 -> X-Pad Slots 1..4, 5..0 -> Hold Touch Roll Ribbon (1/1..1/32), Shift+1..0 -> Direct 10 Voices
+    if (vIdx >= 0) {
+      e.preventDefault();
+      if (!powerRmx) {
+        powerRmx = true;
+        rmx.setBypassed(false);
+        commit();
+      }
+      if (e.shiftKey) {
+        const vInfo = VOICES[vIdx]!;
+        rmx.triggerVoicePad(vInfo.id, true, e.timeStamp);
+        howTo.notifyKeyDown(e.code, `Shift+${vIdx === 9 ? 0 : vIdx + 1} → RMX Trigger ${vInfo.short}`);
+        return;
+      }
+      if (vIdx < 4) {
+        rmx.triggerPadSlot(vIdx, e.timeStamp);
+        howTo.notifyKeyDown(e.code, `${vIdx + 1} → RMX X-Pad Slot ${vIdx + 1}`);
+      } else {
+        const div = RMX_ROLL_DIVS[vIdx - 4] ?? 8;
+        rmx.holdRoll(div, e.timeStamp);
+        howTo.notifyKeyDown(e.code, `Hold ${vIdx === 9 ? 0 : vIdx + 1} → RMX Roll 1/${div}`);
+      }
+      return;
+    }
+
+    switch (e.code) {
+      case "KeyQ":
+        e.preventDefault();
+        if (e.shiftKey) {
+          rmx.setIsoMode("isolator");
+          howTo.notifyKeyDown(e.code, "Shift+Q → RMX Isolator Mode: ISOLATOR");
+        } else {
+          const on = rmx.toggleKill("low");
+          howTo.notifyKeyDown(e.code, `Q → RMX KILL LOW ${on ? "ON" : "OFF"}`);
+        }
+        return;
+      case "KeyW":
+        e.preventDefault();
+        if (e.shiftKey) {
+          rmx.setIsoMode("cut_add");
+          howTo.notifyKeyDown(e.code, "Shift+W → RMX Isolator Mode: CUT/ADD");
+        } else {
+          const on = rmx.toggleKill("mid");
+          howTo.notifyKeyDown(e.code, `W → RMX KILL MID ${on ? "ON" : "OFF"}`);
+        }
+        return;
+      case "KeyE":
+        e.preventDefault();
+        if (e.shiftKey) {
+          rmx.setIsoMode("trans_roll");
+          howTo.notifyKeyDown(e.code, "Shift+E → RMX Isolator Mode: TRANS/ROLL");
+        } else {
+          const on = rmx.toggleKill("high");
+          howTo.notifyKeyDown(e.code, `E → RMX KILL HIGH ${on ? "ON" : "OFF"}`);
+        }
+        return;
+      case "KeyR":
+        e.preventDefault();
+        if (e.shiftKey) {
+          rmx.setIsoMode("gate_drive");
+          howTo.notifyKeyDown(e.code, "Shift+R → RMX Isolator Mode: GATE/DRIVE");
+        } else {
+          rmx.setReleaseLever(true);
+          howTo.notifyKeyDown(e.code, "Hold R → RMX Release FX Lever Engaged");
+        }
+        return;
+      case "KeyT": {
+        e.preventDefault();
+        const rm = rmx.cycleReleaseMode();
+        howTo.notifyKeyDown(e.code, `T → Release FX Mode: ${rm.replace("_", " ").toUpperCase()}`);
+        return;
+      }
+      case "KeyY": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("bpf_echo");
+        howTo.notifyKeyDown(e.code, `Y → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyU": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("echo");
+        howTo.notifyKeyDown(e.code, `U → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyI": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("noise");
+        howTo.notifyKeyDown(e.code, `I → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyO": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("spiral_up");
+        howTo.notifyKeyDown(e.code, `O → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyP": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("reverb_up");
+        howTo.notifyKeyDown(e.code, `P → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyA": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("hpf_echo");
+        howTo.notifyKeyDown(e.code, `A → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyS": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("lpf_echo");
+        howTo.notifyKeyDown(e.code, `S → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyD": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("crush_echo");
+        howTo.notifyKeyDown(e.code, `D → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyF": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("spiral_down");
+        howTo.notifyKeyDown(e.code, `F → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyG": {
+        e.preventDefault();
+        const res = rmx.selectSceneFx("reverb_down");
+        howTo.notifyKeyDown(e.code, `G → Scene FX: ${res.label} (${res.pct}%)`);
+        return;
+      }
+      case "KeyH": {
+        e.preventDefault();
+        const p = e.shiftKey ? rmx.setSceneAmount(0) : rmx.adjustSceneAmount(-0.1);
+        howTo.notifyKeyDown(e.code, `H → Scene FX Level ${p}%`);
+        return;
+      }
+      case "KeyJ": {
+        e.preventDefault();
+        const p = e.shiftKey ? rmx.setSceneAmount(1) : rmx.adjustSceneAmount(0.1);
+        howTo.notifyKeyDown(e.code, `J → Scene FX Level ${p}%`);
+        return;
+      }
+      case "KeyK": {
+        e.preventDefault();
+        const isB = rmx.toggleBank();
+        howTo.notifyKeyDown(e.code, `K → X-Pad ${isB ? "Bank B (LT/RS/OH/CB)" : "Bank A (BD/SD/CP/CH)"}`);
+        return;
+      }
+      case "KeyZ": {
+        e.preventDefault();
+        const q = rmx.toggleQuantize();
+        howTo.notifyKeyDown(e.code, `Z → X-Pad Quantize ${q ? "ON" : "OFF"}`);
+        return;
+      }
+      case "KeyX": {
+        e.preventDefault();
+        const l = rmx.toggleLatchRoll(e.timeStamp);
+        howTo.notifyKeyDown(e.code, `X → Latch Roll ${l ? "ON" : "OFF"}`);
+        return;
+      }
+      case "KeyC": {
+        e.preventDefault();
+        const od = rmx.toggleOverdub();
+        howTo.notifyKeyDown(e.code, `C → X-Pad Overdub ${od ? "ARMED" : "OFF"}`);
+        return;
+      }
+      case "KeyV": {
+        e.preventDefault();
+        const m = rmx.togglePadMute();
+        howTo.notifyKeyDown(e.code, `V → X-Pad Voice ${m ? "MUTED" : "UNMUTED"}`);
+        return;
+      }
+      case "KeyB": {
+        e.preventDefault();
+        if (e.shiftKey) {
+          rmx.resetPitch();
+          howTo.notifyKeyDown(e.code, "Shift+B → X-Pad Pitch 0 st");
+        } else {
+          const st = rmx.adjustPitchSemitones(-1);
+          howTo.notifyKeyDown(e.code, `B → X-Pad Pitch ${st > 0 ? "+" : ""}${st} st`);
+        }
+        return;
+      }
+      case "KeyN": {
+        e.preventDefault();
+        const st = rmx.adjustPitchSemitones(1);
+        howTo.notifyKeyDown(e.code, `N → X-Pad Pitch ${st > 0 ? "+" : ""}${st} st`);
+        return;
+      }
+      case "KeyM": {
+        e.preventDefault();
+        const im = rmx.cycleIsoMode();
+        howTo.notifyKeyDown(e.code, `M → Isolator Mode: ${im.replace("_", "/").toUpperCase()}`);
+        return;
+      }
+      case "Comma":
+        e.preventDefault();
+        toggleRmxPower();
+        howTo.notifyKeyDown(e.code, `, → RMX-1000 ${powerRmx ? "FX ON" : "BYPASSED"}`);
+        return;
+      case "Period":
+        e.preventDefault();
+        rmx.reset();
+        howTo.notifyKeyDown(e.code, ". → RMX-1000 Reset FX");
+        return;
+      case "Minus":
+        if (!clock.following) {
+          e.preventDefault();
+          setBpm(e.shiftKey ? spec.bpm - 0.1 : Math.round(spec.bpm) - 1, "bpm");
+          howTo.notifyKeyDown(e.code, `- → BPM ${spec.bpm}`);
+        }
+        return;
+      case "Equal":
+        if (!clock.following) {
+          e.preventDefault();
+          setBpm(e.shiftKey ? spec.bpm + 0.1 : Math.round(spec.bpm) + 1, "bpm");
+          howTo.notifyKeyDown(e.code, `= → BPM ${spec.bpm}`);
+        }
+        return;
+      case "Backspace":
+        e.preventDefault();
+        rmx.clearPadVoice();
+        howTo.notifyKeyDown(e.code, "Delete → Erase Active X-Pad Voice Steps");
+        return;
+    }
+    return;
+  }
+
+  // =========================================================================
+  // DEVICE C: TRAKTOR PRO 4+ PATTERN PLAYER HOTKEYS
+  // =========================================================================
+  if (isTraktorFocused()) {
+    if (e.repeat) return;
+
+    if (e.altKey) {
+      if (e.code === "KeyB") {
+        e.preventDefault();
+        const st = traktor.adjustPitch(-1);
+        howTo.notifyKeyDown(e.code, `⌥+B → Pattern Player Pitch ${st > 0 ? "+" : ""}${st} st`);
+      } else if (e.code === "KeyN") {
+        e.preventDefault();
+        const st = traktor.adjustPitch(1);
+        howTo.notifyKeyDown(e.code, `⌥+N → Pattern Player Pitch ${st > 0 ? "+" : ""}${st} st`);
+      }
+      return;
+    }
+
+    // 1..0, -, = -> Launch 12 Pre-baked Layer Patterns
+    const patIdx = TRAKTOR_PAT_CODES.indexOf(e.code as (typeof TRAKTOR_PAT_CODES)[number]);
+    if (patIdx >= 0) {
+      e.preventDefault();
+      if (!powerTraktor) {
+        powerTraktor = true;
+        commit();
+      }
+      const pName = traktor.selectPattern(patIdx);
+      howTo.notifyKeyDown(e.code, `Pattern ${patIdx + 1} → ${pName}`);
+      return;
+    }
+
+    // Home Row (A..K) + Bottom Row (Z..,) -> Toggle Steps 1..16 on active stem
+    const trkStepIdx = STEP_KEY_CODES.indexOf(e.code as (typeof STEP_KEY_CODES)[number]);
+    if (trkStepIdx >= 0) {
+      e.preventDefault();
+      traktor.toggleStep(trkStepIdx, e.shiftKey);
+      howTo.notifyKeyDown(e.code, `Step ${trkStepIdx + 1} toggled on Pattern Player`);
+      return;
+    }
+
+    switch (e.code) {
+      case "KeyQ":
+        e.preventDefault();
+        if (!powerTraktor) {
+          powerTraktor = true;
+          commit();
+        }
+        traktor.engageBuildup("echo_hpf", true);
+        howTo.notifyKeyDown(e.code, "Q → Buildup: ECHO + HPF FILTER");
+        return;
+      case "KeyW":
+        e.preventDefault();
+        if (!powerTraktor) {
+          powerTraktor = true;
+          commit();
+        }
+        traktor.engageBuildup("noise_filter", true);
+        howTo.notifyKeyDown(e.code, "W → Buildup: NOISE + FILTER SWEEP");
+        return;
+      case "KeyE":
+        e.preventDefault();
+        if (!powerTraktor) {
+          powerTraktor = true;
+          commit();
+        }
+        traktor.engageBuildup("spiral_roll", true);
+        howTo.notifyKeyDown(e.code, "E → Buildup: SPIRAL + SNARE ROLL");
+        return;
+      case "KeyT":
+        e.preventDefault();
+        if (!powerTraktor) {
+          powerTraktor = true;
+          commit();
+        }
+        traktor.engageBuildup("sub_reverb", true);
+        howTo.notifyKeyDown(e.code, "T → Buildup: SUB KILL + REVERB");
+        return;
+      case "KeyR":
+        e.preventDefault();
+        if (traktor.isBuildupActive) {
+          traktor.releaseIntoDrop();
+          howTo.notifyKeyDown(e.code, "R → RELEASE INTO DROP!");
+        } else {
+          rmx.setReleaseLever(true);
+          howTo.notifyKeyDown(e.code, "Hold R → RMX Release FX Lever");
+        }
+        return;
+      case "KeyY": {
+        e.preventDefault();
+        const kName = traktor.cycleKit(-1);
+        howTo.notifyKeyDown(e.code, `Y → Kit: ${kName}`);
+        return;
+      }
+      case "KeyI": {
+        e.preventDefault();
+        const kName = traktor.cycleKit(1);
+        howTo.notifyKeyDown(e.code, `I → Kit: ${kName}`);
+        return;
+      }
+      case "KeyU": {
+        e.preventDefault();
+        const d = traktor.toggleDucking();
+        howTo.notifyKeyDown(e.code, `U → Ducking ${d ? "ON" : "OFF"}`);
+        return;
+      }
+      case "KeyO": {
+        e.preventDefault();
+        activeTrkStemIdx = (activeTrkStemIdx + 1) % TRAKTOR_STEM_ORDER.length;
+        const st = TRAKTOR_STEM_ORDER[activeTrkStemIdx]!;
+        traktor.selectStem(st);
+        howTo.notifyKeyDown(e.code, `O → Edit Stem: ${st.toUpperCase()}`);
+        return;
+      }
+      case "KeyP":
+        e.preventDefault();
+        traktor.resetActivePattern();
+        howTo.notifyKeyDown(e.code, "P → Reset Pattern Player Steps");
+        return;
+      case "Period": {
+        e.preventDefault();
+        const kc = traktor.toggleKickCut();
+        howTo.notifyKeyDown(e.code, `. → Kick Cut ${kc ? "ON (No 4/4 Kick)" : "OFF (Full Kick)"}`);
+        return;
+      }
+      case "Backspace":
+        e.preventDefault();
+        checkpoint();
+        for (const v of VOICES) traktorSpec.voices[v.id].steps = EMPTY_STEPS;
+        commit();
+        howTo.notifyKeyDown(e.code, "Delete → Clear Pattern Player Steps");
+        return;
+    }
+    return;
+  }
+
+  // =========================================================================
+  // DEVICE D: TR-REC 64-STEP DRUM SEQUENCER HOTKEYS
+  // =========================================================================
+
   // 1. Number Row 1..0: Select Voice, Shift+1..0 Live Drum Trigger, Option+1..0 Mute
   if (vIdx >= 0 && !e.repeat) {
     const vInfo = VOICES[vIdx]!;
     e.preventDefault();
     if (e.altKey) {
       checkpoint();
-      const target = focusedSpec();
-      target.voices[vInfo.id].mute = !target.voices[vInfo.id].mute;
+      spec.voices[vInfo.id].mute = !spec.voices[vInfo.id].mute;
       commit();
       howTo.notifyKeyDown(e.code, `⌥+${vIdx === 9 ? 0 : vIdx + 1} → Mute ${vInfo.short}`);
       return;
     }
     if (e.shiftKey) {
       selected = vInfo.id;
-      if (surfaceMode === "rmx") {
-        rmx.triggerVoicePad(vInfo.id, true, e.timeStamp);
-      } else {
-        void audio.triggerVoice(vInfo.id, 0.95).catch(() => {});
-      }
+      void audio.triggerVoice(vInfo.id, 0.95).catch(() => {});
       renderVoicePanel();
       renderGrid();
       renderGrooveAndFxControls();
@@ -2142,14 +2981,6 @@ window.addEventListener("keydown", (e) => {
     renderGrooveAndFxControls();
     renderMixerDrawer();
     djs.render();
-    if (surfaceMode === "rmx") {
-      if (vIdx < 4) {
-        rmx.triggerPadSlot(vIdx, e.timeStamp);
-      } else {
-        const div = RMX_ROLL_DIVS[vIdx - 4] ?? 8;
-        rmx.holdRoll(div, e.timeStamp);
-      }
-    }
     howTo.notifyKeyDown(e.code, `${vIdx === 9 ? 0 : vIdx + 1} → Select ${vInfo.short} (${vInfo.name})`);
     return;
   }
@@ -2212,20 +3043,14 @@ window.addEventListener("keydown", (e) => {
   if (stepIdx >= 0 && !e.repeat) {
     e.preventDefault();
     checkpoint();
-    if (isDjsFocused()) {
-      editDjsVoiceSteps(selected, (s) =>
-        e.shiftKey || flamMode ? toggleFlam(s, stepIdx) : cycleStep(s, stepIdx),
-      );
-    } else {
-      editVoiceSteps(selected, (s) =>
-        e.shiftKey || flamMode ? toggleFlam(s, stepIdx) : cycleStep(s, stepIdx),
-      );
-      const rIdx = Math.max(
-        0,
-        VOICES.findIndex((item) => item.id === selected),
-      );
-      grid.setFocus(rIdx, stepIdx, false);
-    }
+    editVoiceSteps(selected, (s) =>
+      e.shiftKey || flamMode ? toggleFlam(s, stepIdx) : cycleStep(s, stepIdx),
+    );
+    const rIdx = Math.max(
+      0,
+      VOICES.findIndex((item) => item.id === selected),
+    );
+    grid.setFocus(rIdx, stepIdx, false);
     commit();
     howTo.notifyKeyDown(
       e.code,
@@ -2241,11 +3066,7 @@ window.addEventListener("keydown", (e) => {
     if (kit) {
       e.preventDefault();
       checkpoint();
-      if (isDjsFocused()) {
-        djsSpec = applyKitToSpec(djsSpec, kit);
-      } else {
-        spec = applyKitToSpec(spec, kit);
-      }
+      spec = applyKitToSpec(spec, kit);
       activeKitId = kit.id;
       commit();
       howTo.notifyKeyDown(e.code, `Kit → ${kit.name}`);
@@ -2253,36 +3074,12 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 
-  // 4. Surface Mode, Presets, Group FX (Shift+Q/W/E), Flam, RMX Release FX, Tempo, Nudge & Clear
+  // 4. Presets, Group FX (Shift+Q/W/E), Flam, RMX Release FX, Tempo & Clear
   switch (e.code) {
-    case "Backquote":
-      if (!e.repeat) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          setSurfaceMode(surfaceMode === "booth" ? "sequencer" : "booth");
-        } else {
-          const nextMode: SurfaceMode =
-            surfaceMode === "sequencer" ? "djs" : surfaceMode === "djs" ? "rmx" : "sequencer";
-          setSurfaceMode(nextMode);
-        }
-        const label =
-          surfaceMode === "booth"
-            ? "Booth Split"
-            : surfaceMode === "djs"
-              ? "DJS-1000 Deck"
-              : surfaceMode === "rmx"
-                ? "RMX-1000"
-                : "Step Sequencer";
-        howTo.notifyKeyDown(e.code, `Surface → ${label}`);
-      }
-      break;
     case "KeyQ":
       if (!e.repeat) {
         e.preventDefault();
-        if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(0, e.timeStamp);
-          howTo.notifyKeyDown(e.code, "Q → X-Pad Slot 1");
-        } else if (e.shiftKey) {
+        if (e.shiftKey) {
           const on = triggerGroupEcho("snare_clap");
           howTo.notifyKeyDown(e.code, `Shift+Q → Snare+Clap+Rim Echo ${on ? "ON" : "OFF"}`);
         } else {
@@ -2295,10 +3092,7 @@ window.addEventListener("keydown", (e) => {
     case "KeyW":
       if (!e.repeat) {
         e.preventDefault();
-        if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(1, e.timeStamp);
-          howTo.notifyKeyDown(e.code, "W → X-Pad Slot 2");
-        } else if (e.shiftKey) {
+        if (e.shiftKey) {
           const on = triggerGroupEcho("hats");
           howTo.notifyKeyDown(e.code, `Shift+W → Hi-Hats Echo ${on ? "ON" : "OFF"}`);
         } else {
@@ -2311,10 +3105,7 @@ window.addEventListener("keydown", (e) => {
     case "KeyE":
       if (!e.repeat) {
         e.preventDefault();
-        if (surfaceMode === "rmx") {
-          rmx.triggerPadSlot(2, e.timeStamp);
-          howTo.notifyKeyDown(e.code, "E → X-Pad Slot 3");
-        } else if (e.shiftKey) {
+        if (e.shiftKey) {
           const on = triggerGroupEcho("toms");
           howTo.notifyKeyDown(e.code, `Shift+E → Toms+Cowbell Echo ${on ? "ON" : "OFF"}`);
         } else {
@@ -2327,13 +3118,8 @@ window.addEventListener("keydown", (e) => {
     case "KeyR":
       if (!e.repeat) {
         e.preventDefault();
-        if (surfaceMode === "rmx" && e.shiftKey) {
-          rmx.triggerPadSlot(3, e.timeStamp);
-          howTo.notifyKeyDown(e.code, "Shift+R → X-Pad Slot 4");
-        } else {
-          rmx.setReleaseLever(true);
-          howTo.notifyKeyDown(e.code, "Hold R → RMX-1000 Release FX Engaged");
-        }
+        rmx.setReleaseLever(true);
+        howTo.notifyKeyDown(e.code, "Hold R → RMX-1000 Release FX Engaged");
       }
       break;
     case "KeyT":
@@ -2342,49 +3128,25 @@ window.addEventListener("keydown", (e) => {
         howTo.notifyKeyDown(e.code, "T → Tap Tempo");
       }
       break;
-    case "BracketLeft":
     case "Minus":
       if (!clock.following) {
         e.preventDefault();
         setBpm(e.shiftKey ? spec.bpm - 0.1 : Math.round(spec.bpm) - 1, "bpm");
-        howTo.notifyKeyDown(e.code, `[ → BPM ${spec.bpm}`);
+        howTo.notifyKeyDown(e.code, `- → BPM ${spec.bpm}`);
       }
       break;
-    case "BracketRight":
     case "Equal":
       if (!clock.following) {
         e.preventDefault();
         setBpm(e.shiftKey ? spec.bpm + 0.1 : Math.round(spec.bpm) + 1, "bpm");
-        howTo.notifyKeyDown(e.code, `] → BPM ${spec.bpm}`);
-      }
-      break;
-    case "Semicolon":
-      e.preventDefault();
-      $<HTMLButtonElement>("nudge-down").dispatchEvent(
-        new MouseEvent("click", { shiftKey: e.shiftKey }),
-      );
-      howTo.notifyKeyDown(e.code, "; → Phase Nudge Earlier");
-      break;
-    case "Quote":
-      e.preventDefault();
-      $<HTMLButtonElement>("nudge-up").dispatchEvent(
-        new MouseEvent("click", { shiftKey: e.shiftKey }),
-      );
-      howTo.notifyKeyDown(e.code, "' → Phase Nudge Later");
-      break;
-    case "KeyL":
-      if (!e.repeat) {
-        e.preventDefault();
-        $<HTMLButtonElement>("resync").click();
-        howTo.notifyKeyDown(e.code, "L → Re-sync Bar Phase");
+        howTo.notifyKeyDown(e.code, `= → BPM ${spec.bpm}`);
       }
       break;
     case "Period":
       if (!e.repeat) {
         e.preventDefault();
         checkpoint();
-        const target = focusedSpec();
-        target.voices[selected].mute = !target.voices[selected].mute;
+        spec.voices[selected].mute = !spec.voices[selected].mute;
         commit();
         howTo.notifyKeyDown(e.code, `. → Mute ${selected.toUpperCase()}`);
       }
@@ -2393,28 +3155,15 @@ window.addEventListener("keydown", (e) => {
       if (!e.repeat) {
         e.preventDefault();
         checkpoint();
-        if (isDjsFocused()) {
-          ensureSpecBarsPopulated(djsSpec, djsEditBank);
-          if (e.shiftKey) {
-            for (const v of VOICES) {
-              setStepsForBar(djsSpec.voices[v.id], djsEditBank, EMPTY_STEPS);
-            }
-            howTo.notifyKeyDown(e.code, "Shift+Delete → Clear All DJS Voices");
-          } else {
-            setStepsForBar(djsSpec.voices[selected], djsEditBank, EMPTY_STEPS);
-            howTo.notifyKeyDown(e.code, `Delete → Clear DJS ${selected.toUpperCase()}`);
+        ensureBarsPopulated(editBank);
+        if (e.shiftKey) {
+          for (const v of VOICES) {
+            setStepsForBar(spec.voices[v.id], editBank, EMPTY_STEPS);
           }
+          howTo.notifyKeyDown(e.code, "Shift+Delete → Clear All Voices");
         } else {
-          ensureBarsPopulated(editBank);
-          if (e.shiftKey) {
-            for (const v of VOICES) {
-              setStepsForBar(spec.voices[v.id], editBank, EMPTY_STEPS);
-            }
-            howTo.notifyKeyDown(e.code, "Shift+Delete → Clear All Voices");
-          } else {
-            setStepsForBar(spec.voices[selected], editBank, EMPTY_STEPS);
-            howTo.notifyKeyDown(e.code, `Delete → Clear ${selected.toUpperCase()}`);
-          }
+          setStepsForBar(spec.voices[selected], editBank, EMPTY_STEPS);
+          howTo.notifyKeyDown(e.code, `Delete → Clear ${selected.toUpperCase()}`);
         }
         commit();
       }
@@ -2426,7 +3175,21 @@ window.addEventListener("pagehide", () => {
 });
 window.addEventListener("keyup", (e) => {
   if (e.code === "Space" && e.target instanceof HTMLButtonElement) e.preventDefault();
-  if (e.code === "KeyR") rmx.setReleaseLever(false);
+  if (e.code === "KeyR" && !isDjsFocused()) rmx.setReleaseLever(false);
+  if (e.code === "Period" && isDjsFocused()) rmx.setReleaseLever(false);
+  if (isDjsFocused()) {
+    djs.releaseKeyHold();
+  }
+  if (isTraktorFocused()) {
+    const map: Partial<Record<string, BuildupMacroId>> = {
+      KeyQ: "echo_hpf",
+      KeyW: "noise_filter",
+      KeyE: "spiral_roll",
+      KeyT: "sub_reverb",
+    };
+    const macro = map[e.code];
+    if (macro) traktor.onBuildupInputUp(macro);
+  }
   if (
     ["Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Digit0"].includes(e.code) &&
     surfaceMode === "rmx"

@@ -406,6 +406,15 @@ input[type="range"] {
   background-color: #ff6a2b;
   box-shadow: 0 0 8px #ff6a2b;
 }
+.mach-trk[aria-pressed="true"] {
+  background-color: rgba(163, 230, 53, 0.18);
+  border-color: #a3e635;
+  color: var(--text);
+}
+.mach-trk[aria-pressed="true"] .mach-led {
+  background-color: #a3e635;
+  box-shadow: 0 0 8px #a3e635;
+}
 .mach-djs[aria-pressed="true"] {
   background-color: rgba(0, 212, 255, 0.18);
   border-color: #00d4ff;
@@ -467,11 +476,13 @@ input[type="range"] {
 }
 
 #grid-panel[data-machine-off="true"],
+#traktor-panel[data-machine-off="true"],
 #djs-panel[data-machine-off="true"],
 #rmx-panel[data-machine-off="true"] {
   border-style: dashed;
 }
 #grid-panel[data-machine-off="true"] > :not(.panel-head),
+#traktor-panel[data-machine-off="true"] > :not(.panel-head),
 #djs-panel[data-machine-off="true"] > :not(.panel-head),
 #rmx-panel[data-machine-off="true"] > :not(.panel-head) {
   opacity: 0.56;
@@ -1750,7 +1761,7 @@ input[type="range"] {
 }
 
 .howto-modal {
-  width: min(820px, 100%);
+  width: min(920px, 100%);
   max-height: calc(100vh - 32px);
   overflow-y: auto;
   background-color: #0e121b;
@@ -3565,6 +3576,498 @@ input[type="range"] {
 :root[data-theme="maschine"] .step.q3[data-state="flam"] {
   background-color: #ec4899;
   border-color: #f472b6;
+}
+
+/* ---- Hardware Keycap Badges, Clock Sync Help & Traktor Pro 4+ Pattern Player ---- */
+
+.clock-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.clock-help-btn {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-color: #58c4dd;
+  color: #58c4dd;
+  background-color: rgba(88, 196, 221, 0.12);
+}
+.clock-help-btn:hover {
+  border-color: #f7d154;
+  color: #f7d154;
+}
+
+.howto-mode-tabs {
+  flex-wrap: wrap;
+}
+.howto-mode-tab {
+  padding: 5px 9px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+.kb-cap {
+  border-bottom: 2px solid var(--kb-accent, #2b3a52);
+}
+.kb-cap.kb-live {
+  background-color: rgba(247, 209, 84, 0.25);
+  border-color: #f7d154;
+  box-shadow: 0 0 10px rgba(247, 209, 84, 0.45);
+}
+
+/* Corner MacBook Air keycap hints on DJS-1000, RMX-1000 & Pattern Player controls */
+.djs-pad,
+.rmx-pad-btn,
+.rmx-fx-btn,
+.rmx-strip button,
+.djs-touch-strip button,
+.djs-pad-modes button,
+.trk-pat-btn,
+.trk-build-btn,
+.trk-drop-btn,
+.trk-step {
+  position: relative;
+}
+
+.djs-pad::after,
+.rmx-pad-btn::after,
+.rmx-fx-btn::after,
+.rmx-strip button::after,
+.djs-touch-strip button::after,
+.trk-pat-btn::after,
+.trk-build-btn::after,
+.trk-drop-btn::after,
+.trk-step::after {
+  content: attr(data-key);
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  opacity: 0.72;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.djs-pad::after {
+  top: auto;
+  bottom: 4px;
+  right: 6px;
+  font-size: 9.5px;
+}
+
+.djs-pad[data-pad-state="selected"]::after,
+.rmx-pad-btn[aria-pressed="true"]::after,
+.rmx-fx-btn[aria-pressed="true"]::after,
+.trk-pat-btn[aria-pressed="true"]::after,
+.trk-build-btn[aria-pressed="true"]::after {
+  color: currentColor;
+  opacity: 0.9;
+}
+
+.kb-flash {
+  outline: 2px solid #f7d154 !important;
+  box-shadow: 0 0 12px rgba(247, 209, 84, 0.65) !important;
+}
+
+/* Traktor Pro 4+ Pattern Player Surface */
+.traktor-panel {
+  display: grid;
+  gap: 12px;
+}
+.traktor-panel[hidden] {
+  display: none !important;
+}
+.trk-head {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.trk-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.trk-readout {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background-color: var(--field);
+  border: 1px solid var(--line-2);
+  color: #a3e635;
+}
+.trk-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.trk-controls-bar {
+  display: grid;
+  grid-template-columns: minmax(175px, 1.3fr) repeat(4, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.trk-kit-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.trk-kit-field select {
+  width: 100%;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.trk-patterns-section {
+  display: grid;
+  gap: 7px;
+}
+.trk-sec-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 10px;
+}
+.trk-pat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.trk-pat-btn {
+  min-height: 44px;
+  padding: 6px 10px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 2px;
+  text-align: left;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid #38bdf8;
+  border-radius: 7px;
+}
+.trk-pat-btn[data-trk-genre="House / Groove"] {
+  border-left-color: #2dd4bf;
+}
+.trk-pat-btn[data-trk-genre="Breakbeat"] {
+  border-left-color: #c084fc;
+}
+.trk-pat-genre {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.trk-pat-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.trk-pat-btn[aria-pressed="true"] {
+  background-color: rgba(163, 230, 53, 0.16);
+  border-color: #a3e635;
+  box-shadow: inset 0 0 0 1px rgba(163, 230, 53, 0.45);
+}
+.trk-pat-btn[aria-pressed="true"] .trk-pat-genre {
+  color: #bef264;
+}
+
+/* Dramatic Buildup -> Release Into Drop Bar */
+.trk-buildup-box {
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(24, 30, 46, 0.95), rgba(16, 20, 32, 0.98));
+  border: 1px solid #384968;
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.trk-buildup-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 10px;
+}
+.trk-buildup-status {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.trk-buildup-status[data-state="building"] {
+  color: #fbbf24;
+}
+.trk-buildup-status[data-state="dropped"] {
+  color: #4ade80;
+}
+.trk-buildup-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(150px, 1.25fr);
+  gap: 6px;
+}
+.trk-build-btn {
+  min-height: 42px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background-color: #182235;
+  border: 1px solid #354a6e;
+  color: #e2e8f0;
+}
+.trk-build-btn[aria-pressed="true"] {
+  background-color: #f59e0b;
+  border-color: #fde68a;
+  color: #0b0e14;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
+}
+.trk-drop-btn {
+  min-height: 42px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background-color: rgba(239, 68, 68, 0.18);
+  border: 2px solid #f97316;
+  color: #fed7aa;
+}
+.trk-drop-btn[data-armed="true"] {
+  background-color: #ef4444;
+  border-color: #ffffff;
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.75);
+}
+.trk-buildup-meter {
+  height: 6px;
+  border-radius: 999px;
+  background-color: #0b0e16;
+  border: 1px solid #263349;
+  overflow: hidden;
+}
+.trk-buildup-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #38bdf8, #f59e0b, #ef4444);
+  transition: width 60ms linear;
+}
+
+/* Traktor 2x8 (16-step) Minimalist Step Strip */
+.trk-seq-footer {
+  display: grid;
+  gap: 7px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+.trk-seq-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px 10px;
+}
+.trk-stem-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #a3e635;
+}
+.trk-stem-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.trk-step-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+.trk-step {
+  min-height: 38px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  background-color: var(--field);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+.trk-step.beat {
+  border-color: #45536d;
+}
+.trk-step-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.trk-step-led {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background-color: #232a38;
+}
+.trk-step[data-state="on"] .trk-step-led,
+.trk-step[data-state="flam"] .trk-step-led {
+  background-color: #a3e635;
+  box-shadow: 0 0 6px rgba(163, 230, 53, 0.6);
+}
+.trk-step[data-state="accent"] .trk-step-led,
+.trk-step[data-state="accent-flam"] .trk-step-led {
+  background-color: #facc15;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+}
+.trk-step.playing {
+  border-color: var(--head);
+  box-shadow: 0 0 0 1.5px var(--head);
+}
+
+/* Booth Split compact layout for Pattern Player at 1280x800 & 1440x800 */
+@media (min-width: 960px) {
+  #app[data-surface="booth"] #traktor-panel {
+    padding: 6px 8px;
+    gap: 5px;
+  }
+  #app[data-surface="booth"] .trk-head {
+    margin-bottom: 0;
+  }
+  #app[data-surface="booth"] #trk-title {
+    font-size: 11px;
+  }
+  #app[data-surface="booth"] .trk-readout {
+    font-size: 9.5px;
+    padding: 1px 6px;
+  }
+  #app[data-surface="booth"] .trk-head-actions button {
+    min-height: 21px;
+    padding: 1px 6px;
+    font-size: 9.5px;
+  }
+  #app[data-surface="booth"] .trk-controls-bar {
+    padding: 5px 8px;
+    gap: 6px 8px;
+  }
+  #app[data-surface="booth"] .trk-controls-bar .knob-label,
+  #app[data-surface="booth"] .trk-kit-field .label {
+    font-size: 9.5px;
+  }
+  #app[data-surface="booth"] .trk-controls-bar select {
+    min-height: 23px;
+    padding: 1px 5px;
+    font-size: 10.5px;
+  }
+  #app[data-surface="booth"] .trk-controls-bar input[type="range"] {
+    height: 13px;
+  }
+  #app[data-surface="booth"] .trk-sec-head .hint {
+    display: none;
+  }
+  #app[data-surface="booth"] .trk-pat-grid {
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .trk-pat-btn {
+    min-height: 31px;
+    padding: 3px 6px;
+    gap: 0;
+  }
+  #app[data-surface="booth"] .trk-pat-genre {
+    font-size: 8px;
+  }
+  #app[data-surface="booth"] .trk-pat-name {
+    font-size: 10px;
+  }
+  #app[data-surface="booth"] .trk-buildup-box {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .trk-buildup-row {
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .trk-build-btn,
+  #app[data-surface="booth"] .trk-drop-btn {
+    min-height: 29px;
+    padding: 2px 5px;
+    font-size: 9.5px;
+  }
+  #app[data-surface="booth"] .trk-seq-footer {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .trk-stem-tabs button {
+    min-height: 20px;
+    padding: 1px 6px;
+    font-size: 9.5px;
+  }
+  #app[data-surface="booth"] .trk-step-grid {
+    gap: 4px;
+  }
+  #app[data-surface="booth"] .trk-step {
+    min-height: 27px;
+    padding: 2px 4px;
+  }
+  #app[data-surface="booth"] #clock .clock-help-btn {
+    min-height: 19px;
+    padding: 1px 6px;
+    font-size: 9px;
+  }
+}
+
+/* Mobile 390x844 responsive layout for Pattern Player & 5 mode tabs */
+@media (max-width: 760px) {
+  .mode-tab {
+    flex: 1 1 auto;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .trk-controls-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trk-kit-field {
+    grid-column: 1 / -1;
+  }
+  .trk-pat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trk-buildup-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trk-drop-btn {
+    grid-column: 1 / -1;
+  }
+  .trk-step-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+:root[data-theme="tr-silver"] .trk-readout,
+:root[data-theme="tr-silver"] .trk-stem-label {
+  color: #166534;
+}
+:root[data-theme="tr-silver"] .trk-drop-btn {
+  color: #7c2d12;
+  background-color: rgba(249, 115, 22, 0.2);
+}
+:root[data-theme="tr-silver"] .trk-drop-btn[data-armed="true"] {
+  color: #ffffff;
+  background-color: #dc2626;
 }
 
 @media (prefers-reduced-motion: reduce) {

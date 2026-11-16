@@ -4,7 +4,7 @@
 import { sanitize, type PatternSpec, type VoiceSpec } from "./spec";
 import { VOICES, type VoiceId } from "./voices";
 
-export type PresetCategory = "Core Booth" | "Nu-Disco" | "House" | "Techno";
+export type PresetCategory = "Core Booth" | "Breakbeat" | "Nu-Disco" | "House" | "Techno";
 
 export interface KitPreset {
   id: string;
@@ -574,12 +574,7 @@ export const PRESETS: readonly Preset[] = [
     },
     "silver-electro",
   ),
-  preset(
-    "hard-groove-tool",
-    "Hard Groove Tool",
-    "Techno",
-    "Techno: high-energy tribal hard-groove loop with flammed snares, interlocking toms & open hats",
-    {
+    preset("hard-groove-tool", "Hard Groove Tool", "Techno", "Techno: high-energy tribal hard-groove loop with flammed snares, interlocking toms & open hats", {
       bpm: 138,
       shuffle: 0.2,
       accent: 0.82,
@@ -595,8 +590,96 @@ export const PRESETS: readonly Preset[] = [
         open_hat: { steps: "--X---X---X---X-" },
         cowbell: { steps: "--x---x---x---x-", level: 0.55 },
       },
+    }, "warehouse-raw"),
+
+  // ---- Breakbeat (Pre-baked syncopated breaks & heavy sub-bass rollers) ----
+  preset(
+    "warehouse-break",
+    "Warehouse Break",
+    "Breakbeat",
+    "Breakbeat: classic Amen-style syncopated kick, ghosted flammed break snares & deep TR-8O8 sub weight",
+    {
+      bpm: 132,
+      shuffle: 0.08,
+      accent: 0.78,
+      flam: 0.36,
+      voices: {
+        kick: { steps: "X--x--X---x---x-", tune: 0.14, decay: 0.9, level: 0.98 },
+        snare: { steps: "----X--f-x--X--f", tune: 0.58, decay: 0.36, snappy: 0.9, level: 0.92 },
+        clap: { steps: "----x-------X---", level: 0.72 },
+        low_tom: { steps: "------x---x-----", tune: 0.1, decay: 0.82, level: 0.84 },
+        rim: { steps: "--x----x-x----x-", level: 0.68 },
+        closed_hat: { steps: "xxXxxxXxxxXxxxXx", decay: 0.22, level: 0.72 },
+        open_hat: { steps: "----------X---X-", decay: 0.58, level: 0.78 },
+      },
+    },
+    "sub-boom",
+  ),
+  preset(
+    "uk-sub-break",
+    "UK Sub Break",
+    "Breakbeat",
+    "Breakbeat: heavy UK bassline roller with 46 Hz sub-tom bass pulse, 2-step kick & crisp ghost snares",
+    {
+      bpm: 130,
+      shuffle: 0.22,
+      accent: 0.8,
+      flam: 0.4,
+      voices: {
+        kick: { steps: "X-----X---x---x-", tune: 0.1, decay: 0.92, level: 0.99 },
+        low_tom: { steps: "--X--x--X--x--X-", tune: 0.06, decay: 0.88, tone: 0.2, level: 0.9 },
+        snare: { steps: "----X--x----F--x", snappy: 0.88, level: 0.9 },
+        clap: { steps: "----x-------X---", level: 0.78 },
+        rim: { steps: "-x-----x-x---x--", level: 0.7 },
+        closed_hat: { steps: "x-xxx-xxx-xxx-xx", level: 0.72 },
+        open_hat: { steps: "--x-------x---X-", level: 0.78 },
+      },
     },
     "warehouse-raw",
+  ),
+  preset(
+    "euphoric-break",
+    "Euphoric Break",
+    "Breakbeat",
+    "Breakbeat: melodic peak-time club breakbeat (Bicep/Overmono vibe) with warm sub & open-hat lift",
+    {
+      bpm: 128,
+      shuffle: 0.14,
+      accent: 0.72,
+      flam: 0.42,
+      voices: {
+        kick: { steps: "X-----x---X---x-", tune: 0.2, decay: 0.84, level: 0.96 },
+        snare: { steps: "----F-------X-x-", tune: 0.56, snappy: 0.86, level: 0.88 },
+        clap: { steps: "----X-------F---", reverb_send: 0.65, level: 0.84 },
+        low_tom: { steps: "---x--X----x----", tune: 0.22, decay: 0.74, level: 0.82 },
+        mid_tom: { steps: "---------x----x-", tune: 0.48, decay: 0.62, level: 0.76 },
+        closed_hat: { steps: "x-x-x-x-x-x-x-x-", level: 0.7 },
+        open_hat: { steps: "--X---X---X---X-", decay: 0.76, level: 0.82 },
+      },
+    },
+    "club-punch",
+  ),
+  preset(
+    "electro-bass-break",
+    "Electro Bass Break",
+    "Breakbeat",
+    "Breakbeat: Detroit/Miami electro sub-boom break with syncopated cowbell, snappy snare & 16th hat roll",
+    {
+      bpm: 126,
+      shuffle: 0.06,
+      accent: 0.76,
+      flam: 0.38,
+      voices: {
+        kick: { steps: "X--x--x---X--x--", tune: 0.08, decay: 0.96, level: 0.99 },
+        snare: { steps: "----X-------X--f", tune: 0.44, snappy: 0.82, level: 0.9 },
+        clap: { steps: "----X-------X---", echo_send: 0.45, level: 0.84 },
+        low_tom: { steps: "-------x---x--x-", tune: 0.16, decay: 0.78, level: 0.84 },
+        cowbell: { steps: "--x---x---x---x-", tune: 0.52, level: 0.72 },
+        closed_hat: { steps: "x-x-x-xxx-x-xXx-", level: 0.74 },
+        open_hat: { steps: "------X-------X-", level: 0.76 },
+      },
+    },
+    "sub-boom",
   ),
 ];
 

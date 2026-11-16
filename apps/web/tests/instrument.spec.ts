@@ -959,3 +959,136 @@ test("Individual Machine ON/OFF switches and explicit Save / Reset startup persi
   await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
   expect(errors).toEqual([]);
 });
+
+test("DJS-1000 & RMX-1000 full MacBook Air hotkeys and 5-tab 3Blue1Brown How-To + DJ Sync guide", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  // 1. DJS-1000 4x4 left-hand pad keys, Pad Mode keys (5..8), Scene keys (9/0), Live Rec (U)
+  await page.locator("#mode-djs").click();
+  await page.keyboard.press("KeyQ"); // Pad 5 = HT High Tom
+  await expect(page.locator("#djs-screen-track")).toContainText("HT HIGH TOM");
+  await page.keyboard.press("Digit2"); // Pad 2 = SD Snare
+  await expect(page.locator("#djs-screen-track")).toContainText("SD SNARE");
+  await page.keyboard.press("Digit6"); // Mute / Solo pad mode
+  await expect(page.locator('[data-djs-pad-mode="mute"]')).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Digit7"); // 16-Pad Pitch mode
+  await expect(page.locator('[data-djs-pad-mode="scale"]')).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Digit0"); // Next Scene (S2)
+  await expect(page.locator('[data-djs-scene="1"]')).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("KeyU"); // Live Rec armed
+  await expect(page.locator("#djs-live-rec")).toHaveAttribute("aria-pressed", "true");
+
+  // 2. RMX-1000 Isolator Kill keys (Q/W/E), Scene FX keys (O + J), Overdub (C), Reset (.)
+  await page.locator("#mode-rmx").click();
+  await page.keyboard.press("KeyQ");
+  await page.keyboard.press("KeyW");
+  await page.keyboard.press("KeyE");
+  await expect(page.locator("#rmx-kill-low")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#rmx-kill-mid")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#rmx-kill-high")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("KeyO"); // SPIRAL UP -> auto-bumps level to 35%
+  await expect(page.locator("#rmx-readout")).toContainText("SPIRAL UP 35%");
+  await page.keyboard.press("KeyJ"); // +10% -> 45%
+  await expect(page.locator("#rmx-scene-amount-out")).toHaveText("45%");
+  await page.keyboard.press("KeyC");
+  await expect(page.locator("#rmx-overdub")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Period"); // Reset RMX FX
+  await expect(page.locator("#rmx-kill-low")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#rmx-scene-amount-out")).toHaveText("0%");
+
+  // 3. Clock 'Sync Guide' button opens How-To directly on DJ Sync (CDJ / Ableton Link / MIDI)
+  await page.locator("#clock-sync-help").click();
+  const modal = page.locator("#how-to-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toHaveAttribute("data-guide-mode", "sync");
+  await expect(page.locator("#howto-qs-sync")).toBeVisible();
+  await expect(page.locator("#howto-caption")).toContainText("Pioneer CDJ Sync");
+
+  await page.locator("#howto-mode-traktor").click();
+  await expect(modal).toHaveAttribute("data-guide-mode", "traktor");
+  await expect(page.locator("#howto-qs-traktor")).toBeVisible();
+  await expect(page.locator("#howto-caption")).toContainText("Pattern Player");
+
+  await page.locator("#howto-mode-djs").click();
+  await expect(modal).toHaveAttribute("data-guide-mode", "djs");
+  await expect(page.locator("#howto-qs-djs")).toBeVisible();
+  await expect(page.locator("#howto-caption")).toContainText("DJS-1000 Deck");
+
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test("Traktor Pro 4+ Pattern Player: heavy sub kits, Breakbeat patterns, Buildup-to-Drop UX & Booth Split fit", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  // Verify Breakbeat presets exist in TR Preset selector too
+  const presetSelect = page.getByRole("combobox", { name: "Load a preset pattern" });
+  await presetSelect.selectOption("warehouse-break");
+  await expect(page.locator("#bpm")).toHaveValue("132");
+
+  // Switch to Pattern Player -> auto-solos Pattern Player ON
+  await page.locator("#mode-traktor").click();
+  await expect(app(page)).toHaveAttribute("data-surface", "traktor");
+  await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "false");
+
+  // Launch UK Sub Break via Digit0, toggle Kick Cut (.) & Ducking (U)
+  await page.keyboard.press("Digit0");
+  await expect(page.locator("#trk-readout")).toContainText("UK SUB BREAK");
+  await page.keyboard.press("Period");
+  await expect(page.locator("#trk-kick-cut")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("KeyU");
+  await expect(page.locator("#trk-ducking")).toHaveAttribute("aria-pressed", "true");
+
+  // Engage dramatic 1-click Buildup (KeyQ = ECHO + HPF FILTER) -> arms Drop, then Release Into Drop (KeyR)
+  await play(page);
+  await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-35);
+  await page.keyboard.press("KeyQ");
+  await expect(page.locator("#trk-drop-btn")).toHaveAttribute("data-armed", "true");
+  await expect(page.locator("#trk-buildup-status")).toContainText("ECHO + HPF FILTER");
+
+  await page.keyboard.press("KeyR");
+  await expect(page.locator("#trk-drop-btn")).toHaveAttribute("data-armed", "false");
+  await expect(page.locator("#trk-buildup-status")).toContainText("DROPPED ON ACTIVE PATTERN");
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+
+  // Check 390x844 phone layout on Pattern Player
+  await expectPhoneLayout(page);
+
+  // Check zero-scroll 1440x800 and 1280x800 Booth Split with Pattern Player on left + RMX-1000 on right
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.locator("#mode-booth").click();
+  await page.locator("#booth-swap-trk").click();
+  await expect(app(page)).toHaveAttribute("data-booth-deck", "traktor");
+  await expect(page.locator("#traktor-panel")).toBeVisible();
+  await expect(page.locator("#rmx-panel")).toBeVisible();
+
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const fit = await page.evaluate(() => {
+      const trkRect = document.getElementById("traktor-panel")!.getBoundingClientRect();
+      const rmxRect = document.getElementById("rmx-panel")!.getBoundingClientRect();
+      const clockRect = document.getElementById("clock")!.getBoundingClientRect();
+      return {
+        scrollHeight: document.documentElement.scrollHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        trkRight: trkRect.right,
+        rmxLeft: rmxRect.left,
+        clockBottom: clockRect.bottom,
+        rmxBottom: rmxRect.bottom,
+      };
+    });
+    expect(fit.rmxLeft).toBeGreaterThanOrEqual(fit.trkRight);
+    expect(fit.clockBottom).toBeLessThanOrEqual(800);
+    expect(fit.rmxBottom).toBeLessThanOrEqual(800);
+    expect(fit.scrollHeight).toBeLessThanOrEqual(800);
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
+  }
+  expect(errors).toEqual([]);
+});

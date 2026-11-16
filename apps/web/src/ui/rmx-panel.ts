@@ -75,6 +75,7 @@ export class RmxPanel {
   private rollBasePitch = 0;
   private rollLatched = false;
   private overdubStepCursor = 0;
+  private flashTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
   private rotaryRefs: {
     input: HTMLInputElement;
     arc: SVGCircleElement;
@@ -131,6 +132,19 @@ export class RmxPanel {
     this.pushState();
   }
 
+  private flashEl(selector: string): void {
+    const el = this.root.querySelector<HTMLElement>(selector);
+    if (!el) return;
+    const prev = this.flashTimers.get(el);
+    if (prev !== undefined) clearTimeout(prev);
+    el.classList.add("kb-flash");
+    const t = setTimeout(() => {
+      el.classList.remove("kb-flash");
+      this.flashTimers.delete(el);
+    }, 170);
+    this.flashTimers.set(el, t);
+  }
+
   /** Triggers one of the 4 X-Pad slots (0..3) in the active bank. */
   triggerPadSlot(slot: number, eventTimeMs?: number): void {
     if (this.bypassed) return;
@@ -138,6 +152,7 @@ export class RmxPanel {
     const pad = bank[slot];
     if (!pad) return;
     this.state.xpadVoice = pad.id;
+    this.flashEl(`[data-xpad-slot="${slot}"]`);
     this.firePadHit(true, eventTimeMs);
     this.pushState(eventTimeMs);
   }
@@ -177,6 +192,129 @@ export class RmxPanel {
       this.stopRoll();
       this.pushState();
     }
+  }
+
+  toggleKill(band: "low" | "mid" | "high"): boolean {
+    const key = band === "low" ? "killLow" : band === "mid" ? "killMid" : "killHigh";
+    this.state[key] = !this.state[key];
+    this.flashEl(`#rmx-kill-${band}`);
+    this.pushState();
+    return this.state[key];
+  }
+
+  setIsoMode(mode: IsolatorMode): void {
+    this.state.isoMode = mode;
+    this.flashEl(`[data-iso-mode="${mode}"]`);
+    this.pushState();
+  }
+
+  cycleIsoMode(): IsolatorMode {
+    const order: readonly IsolatorMode[] = ["isolator", "cut_add", "trans_roll", "gate_drive"];
+    const cur = order.indexOf(this.state.isoMode);
+    const next = order[(cur + 1) % order.length]!;
+    this.setIsoMode(next);
+    return next;
+  }
+
+  selectSceneFx(fx: SceneFxId): { label: string; pct: number } {
+    this.state.sceneFx = fx;
+    if (this.state.sceneAmount < 0.02) {
+      this.state.sceneAmount = 0.35;
+    }
+    if (!this.bypassed && this.state.sceneAmount > 0.02) {
+      void this.cb.audio.ensureStarted().catch(() => {});
+    }
+    this.flashEl(`[data-scene-fx="${fx}"]`);
+    this.pushState();
+    return { label: SCENE_LABELS[fx], pct: Math.round(this.state.sceneAmount * 100) };
+  }
+
+  setSceneAmount(amount: number): number {
+    this.state.sceneAmount = Math.max(0, Math.min(1, Math.round(amount * 100) / 100));
+    if (!this.bypassed && this.state.sceneAmount > 0.02) {
+      void this.cb.audio.ensureStarted().catch(() => {});
+    }
+    this.pushState();
+    return Math.round(this.state.sceneAmount * 100);
+  }
+
+  adjustSceneAmount(delta: number): number {
+    return this.setSceneAmount(this.state.sceneAmount + delta);
+  }
+
+  cycleReleaseMode(): ReleaseMode {
+    const order: readonly ReleaseMode[] = ["vinyl_brake", "echo", "back_spin"];
+    const cur = order.indexOf(this.state.releaseMode);
+    const next = order[(cur + 1) % order.length]!;
+    this.state.releaseMode = next;
+    this.flashEl(`[data-release-mode="${next}"]`);
+    this.pushState();
+    return next;
+  }
+
+  toggleBank(): boolean {
+    this.state.xpadBankB = !this.state.xpadBankB;
+    const bank = this.state.xpadBankB ? BANK_B : BANK_A;
+    if (!bank.some((p) => p.id === this.state.xpadVoice)) {
+      this.state.xpadVoice = bank[0]!.id;
+    }
+    this.flashEl("#rmx-bank");
+    this.pushState();
+    return this.state.xpadBankB;
+  }
+
+  toggleQuantize(): boolean {
+    this.state.xpadQuantize = !(this.state.xpadQuantize !== false);
+    this.flashEl("#rmx-quantize");
+    this.pushState();
+    return this.state.xpadQuantize;
+  }
+
+  toggleLatchRoll(eventTimeMs?: number): boolean {
+    this.rollLatched = !this.rollLatched;
+    this.flashEl("#rmx-roll-latch");
+    if (this.rollLatched) {
+      this.startRoll(this.state.xpadRollDiv, eventTimeMs);
+    } else if (!this.rollPointerDown) {
+      this.stopRoll();
+      this.pushState(eventTimeMs);
+    } else {
+      this.render();
+    }
+    return this.rollLatched;
+  }
+
+  toggleOverdub(): boolean {
+    this.state.xpadOverdub = !this.state.xpadOverdub;
+    this.flashEl("#rmx-overdub");
+    this.pushState();
+    return this.state.xpadOverdub;
+  }
+
+  togglePadMute(): boolean {
+    this.cb.onToggleVoiceMute(this.state.xpadVoice);
+    this.flashEl("#rmx-voice-mute");
+    this.render();
+    return this.cb.isVoiceMuted(this.state.xpadVoice);
+  }
+
+  clearPadVoice(): void {
+    this.cb.onClearVoice(this.state.xpadVoice);
+    this.flashEl("#rmx-voice-clear");
+    this.render();
+  }
+
+  adjustPitchSemitones(deltaSemi: number): number {
+    const curSemi = Math.round(this.state.xpadPitch * 12);
+    const nextSemi = Math.max(-12, Math.min(12, curSemi + deltaSemi));
+    this.state.xpadPitch = Math.round((nextSemi / 12) * 1000) / 1000;
+    this.pushState();
+    return nextSemi;
+  }
+
+  resetPitch(): void {
+    this.state.xpadPitch = 0;
+    this.pushState();
   }
 
   private enhanceRotaryKnobs(): void {

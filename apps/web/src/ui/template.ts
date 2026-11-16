@@ -4,6 +4,7 @@
 import { GROOVE_TEMPLATES } from "../groove";
 import { KITS, PRESETS, type PresetCategory } from "../presets";
 import { howToModalMarkup } from "./how-to";
+import { TRAKTOR_KITS, TRAKTOR_PATTERNS } from "./traktor-panel";
 
 export interface TemplateOptions {
   single: boolean;
@@ -20,7 +21,7 @@ const knob = (id: string, label: string, min = 0, max = 1, step = 0.01) => `
   </label>`;
 
 export function template(o: TemplateOptions): string {
-  const categories: PresetCategory[] = ["Core Booth", "Nu-Disco", "House", "Techno"];
+  const categories: PresetCategory[] = ["Core Booth", "Breakbeat", "Nu-Disco", "House", "Techno"];
   const presetOptions = categories
     .map((cat) => {
       const items = PRESETS.filter((p) => p.category === cat)
@@ -57,15 +58,23 @@ export function template(o: TemplateOptions): string {
     (_, idx) =>
       `<button type="button" class="djs-scene-btn" data-djs-scene="${idx}" aria-pressed="${idx === 0}">S${idx + 1}</button>`,
   ).join("");
+  const trkKitOptions = TRAKTOR_KITS.map(
+    (k) => `<option value="${k.id}" title="${k.blurb}">${k.name}</option>`,
+  ).join("");
+  const trkPatternButtons = TRAKTOR_PATTERNS.map(
+    (p, idx) =>
+      `<button type="button" class="trk-pat-btn" data-trk-pattern="${idx}" data-trk-genre="${p.genre}" data-key="${p.keyHint}" aria-pressed="${idx === 0}" title="${p.genre} · ${p.name} (Key ${p.keyHint})"><span class="trk-pat-genre">${p.genre}</span><strong class="trk-pat-name">${p.name}</strong></button>`,
+  ).join("");
   return `
   <a class="skip" href="#grid">Skip to the pattern</a>
   <header class="top">
     <h1 class="logo">player<span>5</span></h1>
     <div class="mode-tabs" role="group" aria-label="Surface mode">
       <button id="mode-seq" type="button" class="mode-tab" aria-pressed="true" title="Classic TR-style 16/64-step drum machine">Step Sequencer</button>
+      <button id="mode-traktor" type="button" class="mode-tab" aria-pressed="false" title="Traktor Pro 4+ inspired minimalist Pattern Player with heavy sub-bass, breakbeats &amp; 1-button Buildup-to-Drop FX">Pattern Player</button>
       <button id="mode-djs" type="button" class="mode-tab" aria-pressed="false" title="Pioneer DJ DJS-1000 CDJ-format standalone DJ sampler &amp; 64-step sequencer">DJS-1000 Deck</button>
       <button id="mode-rmx" type="button" class="mode-tab" aria-pressed="false" title="Pioneer RMX-1000 4-section remix station">RMX-1000 Station</button>
-      <button id="mode-booth" type="button" class="mode-tab" aria-pressed="false" title="MacBook Air 13-inch split performance view: Sequencer/DJS + RMX-1000 side by side (Shift + ~)">Booth Split</button>
+      <button id="mode-booth" type="button" class="mode-tab" aria-pressed="false" title="MacBook Air 13-inch split performance view: Sequencer/Pattern Player/DJS + RMX-1000 side by side (Shift + ~)">Booth Split</button>
     </div>
     <select id="theme-select" class="theme-select" aria-label="Visual color scheme" title="Switch hardware visual &amp; color scheme">
       <option value="default">8O8 Booth</option>
@@ -104,6 +113,9 @@ export function template(o: TemplateOptions): string {
         <span class="mach-group-label" aria-hidden="true">ON AIR</span>
         <button id="power-tr" type="button" class="mach-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF">
           <i class="mach-led" aria-hidden="true"></i><span>TR Drums</span>
+        </button>
+        <button id="power-traktor" type="button" class="mach-btn mach-trk" aria-pressed="false" title="Toggle Traktor-style Pattern Player audio ON or OFF">
+          <i class="mach-led" aria-hidden="true"></i><span>Pattern Player</span>
         </button>
         <button id="power-djs" type="button" class="mach-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 standalone sequencer audio ON or OFF">
           <i class="mach-led" aria-hidden="true"></i><span>DJS-1000</span>
@@ -161,21 +173,21 @@ export function template(o: TemplateOptions): string {
               <span class="knob-label">LOW <output id="rmx-iso-low-out" for="rmx-iso-low">0 dB</output></span>
               <input id="rmx-iso-low" type="range" min="-48" max="6" step="1" value="0" />
             </label>
-            <button id="rmx-kill-low" type="button" class="toggle small" aria-pressed="false">KILL LOW</button>
+            <button id="rmx-kill-low" type="button" class="toggle small" data-key="Q" title="Kill Low band (Q in RMX · Ctrl+Q anywhere)" aria-pressed="false">KILL LOW</button>
           </div>
           <div class="rmx-band">
             <label class="knob" for="rmx-iso-mid">
               <span class="knob-label">MID <output id="rmx-iso-mid-out" for="rmx-iso-mid">0 dB</output></span>
               <input id="rmx-iso-mid" type="range" min="-48" max="6" step="1" value="0" />
             </label>
-            <button id="rmx-kill-mid" type="button" class="toggle small" aria-pressed="false">KILL MID</button>
+            <button id="rmx-kill-mid" type="button" class="toggle small" data-key="W" title="Kill Mid band (W in RMX · Ctrl+W anywhere)" aria-pressed="false">KILL MID</button>
           </div>
           <div class="rmx-band">
             <label class="knob" for="rmx-iso-high">
               <span class="knob-label">HIGH <output id="rmx-iso-high-out" for="rmx-iso-high">0 dB</output></span>
               <input id="rmx-iso-high" type="range" min="-48" max="6" step="1" value="0" />
             </label>
-            <button id="rmx-kill-high" type="button" class="toggle small" aria-pressed="false">KILL HIGH</button>
+            <button id="rmx-kill-high" type="button" class="toggle small" data-key="E" title="Kill High band (E in RMX · Ctrl+E anywhere)" aria-pressed="false">KILL HIGH</button>
           </div>
         </div>
       </div>
@@ -184,25 +196,25 @@ export function template(o: TemplateOptions): string {
         <div class="rmx-box-head">
           <h3 id="rmx-xpad-heading">X-PAD FX</h3>
           <div class="rmx-xpad-head-btns">
-            <button id="rmx-quantize" type="button" class="toggle small" aria-pressed="true" title="Snap X-Pad hits &amp; Touch Roll Ribbon to the Step Sequencer beat grid">QUANTIZE</button>
-            <button id="rmx-bank" type="button" class="toggle small" aria-pressed="false">Bank A (BD/SD/CP/CH)</button>
+            <button id="rmx-quantize" type="button" class="toggle small" data-key="Z" aria-pressed="true" title="Snap X-Pad hits &amp; Touch Roll Ribbon to the beat grid (Z)">QUANTIZE</button>
+            <button id="rmx-bank" type="button" class="toggle small" data-key="K" title="Switch X-Pad Bank A / Bank B (K)" aria-pressed="false">Bank A (BD/SD/CP/CH)</button>
           </div>
         </div>
         <div class="rmx-pads" role="group" aria-label="X-Pad drum voices">
-          <button type="button" class="rmx-pad-btn" data-xpad-slot="0" aria-pressed="false">BD · KICK</button>
-          <button type="button" class="rmx-pad-btn" data-xpad-slot="1" aria-pressed="true">SD · SNARE</button>
-          <button type="button" class="rmx-pad-btn" data-xpad-slot="2" aria-pressed="false">CP · CLAP</button>
-          <button type="button" class="rmx-pad-btn" data-xpad-slot="3" aria-pressed="false">CH · HI-HAT</button>
+          <button type="button" class="rmx-pad-btn" data-xpad-slot="0" data-key="1" aria-pressed="false">BD · KICK</button>
+          <button type="button" class="rmx-pad-btn" data-xpad-slot="1" data-key="2" aria-pressed="true">SD · SNARE</button>
+          <button type="button" class="rmx-pad-btn" data-xpad-slot="2" data-key="3" aria-pressed="false">CP · CLAP</button>
+          <button type="button" class="rmx-pad-btn" data-xpad-slot="3" data-key="4" aria-pressed="false">CH · HI-HAT</button>
         </div>
         <div class="rmx-strip-wrap">
-          <span class="label">TOUCH ROLL RIBBON (HOLD OR SLIDE)</span>
+          <span class="label">TOUCH ROLL RIBBON (HOLD 5–0 OR SLIDE)</span>
           <div id="rmx-xpad-strip" class="rmx-strip" role="group" aria-label="X-Pad beat roll division">
-            <button type="button" data-roll-div="1" aria-pressed="false">1/1</button>
-            <button type="button" data-roll-div="2" aria-pressed="false">1/2</button>
-            <button type="button" data-roll-div="4" aria-pressed="false">1/4</button>
-            <button type="button" data-roll-div="8" aria-pressed="true">1/8</button>
-            <button type="button" data-roll-div="16" aria-pressed="false">1/16</button>
-            <button type="button" data-roll-div="32" aria-pressed="false">1/32</button>
+            <button type="button" data-roll-div="1" data-key="5" aria-pressed="false">1/1</button>
+            <button type="button" data-roll-div="2" data-key="6" aria-pressed="false">1/2</button>
+            <button type="button" data-roll-div="4" data-key="7" aria-pressed="false">1/4</button>
+            <button type="button" data-roll-div="8" data-key="8" aria-pressed="true">1/8</button>
+            <button type="button" data-roll-div="16" data-key="9" aria-pressed="false">1/16</button>
+            <button type="button" data-roll-div="32" data-key="0" aria-pressed="false">1/32</button>
           </div>
         </div>
         <div class="rmx-xpad-controls">
@@ -211,10 +223,10 @@ export function template(o: TemplateOptions): string {
             <input id="rmx-pitch" type="range" min="-1" max="1" step="0.05" value="0" />
           </label>
           <div class="rmx-xpad-actions">
-            <button id="rmx-roll-latch" type="button" class="toggle small" aria-pressed="false" title="Hold roll continuously">LATCH ROLL</button>
-            <button id="rmx-overdub" type="button" class="toggle small" aria-pressed="false" title="Record X-Pad hits into the 16-step pattern">OVERDUB</button>
-            <button id="rmx-voice-mute" type="button" class="toggle small" aria-pressed="false" title="Silence selected X-Pad voice in pattern">PAD MUTE</button>
-            <button id="rmx-voice-clear" type="button" class="small" title="Erase selected X-Pad voice steps">ERASE PAD</button>
+            <button id="rmx-roll-latch" type="button" class="toggle small" data-key="X" aria-pressed="false" title="Hold roll continuously (X)">LATCH ROLL</button>
+            <button id="rmx-overdub" type="button" class="toggle small" data-key="C" aria-pressed="false" title="Record X-Pad hits into the 16-step pattern (C)">OVERDUB</button>
+            <button id="rmx-voice-mute" type="button" class="toggle small" data-key="V" aria-pressed="false" title="Silence selected X-Pad voice in pattern (V)">PAD MUTE</button>
+            <button id="rmx-voice-clear" type="button" class="small" data-key="⌫" title="Erase selected X-Pad voice steps (Delete)">ERASE PAD</button>
           </div>
         </div>
       </div>
@@ -222,24 +234,24 @@ export function template(o: TemplateOptions): string {
       <div class="rmx-box rmx-scene" role="group" aria-labelledby="rmx-scene-heading">
         <div class="rmx-box-head">
           <h3 id="rmx-scene-heading">SCENE FX</h3>
-          <span class="hint">Build Up &amp; Break Down</span>
+          <span class="hint">Y–P Build · A–G Break · H/J Level</span>
         </div>
         <div class="rmx-scene-banks">
           <div class="rmx-scene-col">
             <span class="label rmx-build-label">BUILD UP</span>
-            <button type="button" class="rmx-fx-btn build" data-scene-fx="bpf_echo" aria-pressed="true">BPF ECHO</button>
-            <button type="button" class="rmx-fx-btn build" data-scene-fx="echo" aria-pressed="false">ECHO</button>
-            <button type="button" class="rmx-fx-btn build" data-scene-fx="noise" aria-pressed="false">NOISE</button>
-            <button type="button" class="rmx-fx-btn build" data-scene-fx="spiral_up" aria-pressed="false">SPIRAL UP</button>
-            <button type="button" class="rmx-fx-btn build" data-scene-fx="reverb_up" aria-pressed="false">REVERB UP</button>
+            <button type="button" class="rmx-fx-btn build" data-scene-fx="bpf_echo" data-key="Y" aria-pressed="true">BPF ECHO</button>
+            <button type="button" class="rmx-fx-btn build" data-scene-fx="echo" data-key="U" aria-pressed="false">ECHO</button>
+            <button type="button" class="rmx-fx-btn build" data-scene-fx="noise" data-key="I" aria-pressed="false">NOISE</button>
+            <button type="button" class="rmx-fx-btn build" data-scene-fx="spiral_up" data-key="O" aria-pressed="false">SPIRAL UP</button>
+            <button type="button" class="rmx-fx-btn build" data-scene-fx="reverb_up" data-key="P" aria-pressed="false">REVERB UP</button>
           </div>
           <div class="rmx-scene-col">
             <span class="label rmx-break-label">BREAK DOWN</span>
-            <button type="button" class="rmx-fx-btn break" data-scene-fx="hpf_echo" aria-pressed="false">HPF ECHO</button>
-            <button type="button" class="rmx-fx-btn break" data-scene-fx="lpf_echo" aria-pressed="false">LPF ECHO</button>
-            <button type="button" class="rmx-fx-btn break" data-scene-fx="crush_echo" aria-pressed="false">CRUSH ECHO</button>
-            <button type="button" class="rmx-fx-btn break" data-scene-fx="spiral_down" aria-pressed="false">SPIRAL DOWN</button>
-            <button type="button" class="rmx-fx-btn break" data-scene-fx="reverb_down" aria-pressed="false">REVERB DOWN</button>
+            <button type="button" class="rmx-fx-btn break" data-scene-fx="hpf_echo" data-key="A" aria-pressed="false">HPF ECHO</button>
+            <button type="button" class="rmx-fx-btn break" data-scene-fx="lpf_echo" data-key="S" aria-pressed="false">LPF ECHO</button>
+            <button type="button" class="rmx-fx-btn break" data-scene-fx="crush_echo" data-key="D" aria-pressed="false">CRUSH ECHO</button>
+            <button type="button" class="rmx-fx-btn break" data-scene-fx="spiral_down" data-key="F" aria-pressed="false">SPIRAL DOWN</button>
+            <button type="button" class="rmx-fx-btn break" data-scene-fx="reverb_down" data-key="G" aria-pressed="false">REVERB DOWN</button>
           </div>
         </div>
         <div class="rmx-scene-knobs">
@@ -266,13 +278,90 @@ export function template(o: TemplateOptions): string {
         <button type="button" data-release-mode="echo" aria-pressed="false">ECHO</button>
         <button type="button" data-release-mode="back_spin" aria-pressed="false">BACK SPIN</button>
       </div>
-      <button id="rmx-release-lever" type="button" class="rmx-lever" aria-pressed="false" title="Hold to engage Release FX and clear Scene FX on release">
+      <button id="rmx-release-lever" type="button" class="rmx-lever" data-key="Hold R" aria-pressed="false" title="Hold R to engage Release FX and clear Scene FX on release">
         PULL RELEASE LEVER (HOLD)
       </button>
     </div>
   </section>
 
   <div class="booth-seq-col">
+  <section class="panel traktor-panel" id="traktor-panel" aria-labelledby="trk-title" hidden>
+    <div class="panel-head trk-head">
+      <div class="trk-brand">
+        <h2 id="trk-title">Pattern Player · Traktor Pro 4+ Layer Deck</h2>
+        <output id="trk-readout" class="trk-readout" aria-live="polite">BERLIN SUB RUMBLE · SUB RUMBLE 16TH</output>
+      </div>
+      <div class="trk-head-actions">
+        <button id="panel-power-traktor" type="button" class="panel-power-btn mach-trk" aria-pressed="false" title="Toggle Pattern Player audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-trk-label">OFF</span></button>
+        <button id="booth-swap-tr-from-trk" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
+        <button id="trk-kick-cut" type="button" class="toggle small" data-key="." aria-pressed="false" title="Mute 4/4 Kick so heavy sub-bass, breaks &amp; tops layer cleanly over a playing CDJ track (.)">KICK CUT</button>
+        <button id="trk-ducking" type="button" class="toggle small" data-key="U" aria-pressed="false" title="Traktor-style sidechain pump envelope around the downbeat (U)">DUCKING</button>
+        <button id="trk-load-sample" type="button" class="small" title="Load a local WAV/MP3/OGG bass or percussion one-shot from your laptop">+ Load WAV</button>
+        <input id="trk-sample-file" type="file" accept="audio/*" hidden />
+      </div>
+    </div>
+
+    <div class="trk-controls-bar" role="group" aria-label="Pattern Player Kit and Sound Shaping">
+      <label class="field trk-kit-field" for="trk-kit">
+        <span class="label">HEAVY BASS / CLUB KIT [Y / I]</span>
+        <select id="trk-kit" aria-label="Pattern Player heavy bass and percussion kit">${trkKitOptions}</select>
+      </label>
+      <label class="knob" for="trk-volume">
+        <span class="knob-label">VOLUME <output id="trk-volume-out" for="trk-volume">100%</output></span>
+        <input id="trk-volume" type="range" min="0" max="1.2" step="0.02" value="1" />
+      </label>
+      <label class="knob" for="trk-bass">
+        <span class="knob-label">BASS WEIGHT <output id="trk-bass-out" for="trk-bass">75%</output></span>
+        <input id="trk-bass" type="range" min="0" max="1" step="0.02" value="0.75" />
+      </label>
+      <label class="knob" for="trk-pitch">
+        <span class="knob-label">PITCH [B/N] <output id="trk-pitch-out" for="trk-pitch">0 st</output></span>
+        <input id="trk-pitch" type="range" min="-12" max="12" step="1" value="0" />
+      </label>
+      <label class="knob" for="trk-decay">
+        <span class="knob-label">DECAY <output id="trk-decay-out" for="trk-decay">68%</output></span>
+        <input id="trk-decay" type="range" min="0.1" max="1" step="0.02" value="0.68" />
+      </label>
+    </div>
+
+    <div class="trk-patterns-section" role="group" aria-label="Pre-built Techno, House and Breakbeat layer patterns">
+      <div class="trk-sec-head">
+        <span class="label">PRE-BUILT LAYER PATTERNS (TECHNO SUB · HOUSE · BREAKBEAT — KEYS 1..0, −, =)</span>
+        <span class="hint">Synced to master clock · Ready to drop over a live DJ track</span>
+      </div>
+      <div class="trk-pat-grid">${trkPatternButtons}</div>
+    </div>
+
+    <div class="trk-buildup-box" role="group" aria-label="One-button Buildup FX and Release Into Drop">
+      <div class="trk-buildup-head">
+        <span class="label">BUILDUP → DROP FX (TAP ONCE TO LATCH OR HOLD, THEN RELEASE INTO DROP!)</span>
+        <output id="trk-buildup-status" class="trk-buildup-status" data-state="idle" aria-live="polite">READY · TAP OR HOLD A BUILDUP MACRO</output>
+      </div>
+      <div class="trk-buildup-row">
+        <button type="button" class="trk-build-btn" data-trk-buildup="echo_hpf" data-key="Q" aria-pressed="false" title="Sweep High-Pass Filter up + dramatic Dub Echo while cutting sub-bass (Q)">ECHO + HPF FILTER</button>
+        <button type="button" class="trk-build-btn" data-trk-buildup="noise_filter" data-key="W" aria-pressed="false" title="Swell filtered white-noise jet + resonant sweep over active pattern (W)">NOISE + FILTER SWEEP</button>
+        <button type="button" class="trk-build-btn" data-trk-buildup="spiral_roll" data-key="E" aria-pressed="false" title="Accelerating 1/8 → 1/32 snare roll + Spiral Up pitch riser (E)">SPIRAL + SNARE ROLL</button>
+        <button type="button" class="trk-build-btn" data-trk-buildup="sub_reverb" data-key="T" aria-pressed="false" title="Kill low sub-bass + wash tops in rising cavern Reverb (T)">SUB KILL + REVERB</button>
+        <button id="trk-drop-btn" type="button" class="trk-drop-btn" data-key="R" data-armed="false" title="Slam filter wide open, clear echo/noise &amp; drop full heavy sub-bass onto the playing pattern (R)">RELEASE INTO DROP!</button>
+      </div>
+      <div class="trk-buildup-meter" aria-hidden="true"><div id="trk-buildup-fill" class="trk-buildup-fill"></div></div>
+    </div>
+
+    <div class="trk-seq-footer" role="group" aria-label="Pattern Player 2x8 16-step sequencer">
+      <div class="trk-seq-bar">
+        <span id="trk-stem-label" class="trk-stem-label">SUB BASS (LT) · 16 STEPS</span>
+        <div class="trk-stem-tabs" role="group" aria-label="Select Pattern Player stem layer to edit">
+          <button type="button" class="toggle small" data-trk-stem="sub" aria-pressed="true" title="Edit Sub Bass (Low Tom) steps">SUB BASS</button>
+          <button type="button" class="toggle small" data-trk-stem="snare" aria-pressed="false" title="Edit Snare / Breakbeat steps">SNARE / BREAK</button>
+          <button type="button" class="toggle small" data-trk-stem="hats" aria-pressed="false" title="Edit Hi-Hat steps">HI-HATS</button>
+          <button type="button" class="toggle small" data-trk-stem="perc" aria-pressed="false" title="Edit Clap / Perc steps">CLAP / PERC</button>
+          <button id="trk-reset-pat" type="button" class="small" data-key="P" title="Restore active pattern to factory steps (P)">Reset Steps</button>
+        </div>
+      </div>
+      <div id="trk-step-grid" class="trk-step-grid"></div>
+    </div>
+  </section>
+
   <section class="panel djs-panel" id="djs-panel" aria-labelledby="djs-title" hidden>
     <div class="panel-head djs-head">
       <div class="djs-brand">
@@ -282,8 +371,8 @@ export function template(o: TemplateOptions): string {
       <div class="djs-head-actions">
         <button id="panel-power-djs" type="button" class="panel-power-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-djs-label">OFF</span></button>
         <button id="booth-swap-tr" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
-        <button id="djs-quantize" type="button" class="toggle small" aria-pressed="true" title="Snap DJS-1000 pads &amp; rolls to the beat grid">QUANTIZE</button>
-        <button id="djs-live-rec" type="button" class="toggle small djs-rec-btn" aria-pressed="false" title="Overdub live pad hits into the active bar">LIVE REC</button>
+        <button id="djs-quantize" type="button" class="toggle small" data-key="Y" aria-pressed="true" title="Snap DJS-1000 pads &amp; rolls to the beat grid (Y)">QUANTIZE</button>
+        <button id="djs-live-rec" type="button" class="toggle small djs-rec-btn" data-key="U" aria-pressed="false" title="Overdub live pad hits into the active bar (U)">LIVE REC</button>
       </div>
     </div>
 
@@ -297,41 +386,41 @@ export function template(o: TemplateOptions): string {
         </div>
       </div>
       <div class="djs-scenes-row" role="group" aria-label="DJS-1000 Scene matrix">
-        <span class="label">SCENES</span>
+        <span class="label" title="Press 9 / 0 (or Option+1..8) to switch Scenes">SCENES [9/0]</span>
         <div class="djs-scenes">${sceneButtons}</div>
-        <button id="djs-capture-scene" type="button" class="small" title="Snapshot current 64-step pattern into active Scene slot">Capture</button>
+        <button id="djs-capture-scene" type="button" class="small" data-key="P" title="Snapshot current 64-step pattern into active Scene slot (P)">Capture</button>
       </div>
     </div>
 
     <div class="djs-body">
       <div class="djs-strip-col" role="group" aria-label="DJS-1000 Touch Strip">
         <div class="djs-strip-modes">
-          <button type="button" class="small" data-djs-strip-mode="repeat" aria-pressed="true" title="Touch Strip triggers quantized Note Repeat">REPEAT</button>
-          <button type="button" class="small" data-djs-strip-mode="pitch" aria-pressed="false" title="Touch Strip triggers Pitch Bend intervals">PITCH</button>
+          <button type="button" class="small" data-djs-strip-mode="repeat" aria-pressed="true" title="Touch Strip triggers quantized Note Repeat (Toggle: T)">REPEAT</button>
+          <button type="button" class="small" data-djs-strip-mode="pitch" aria-pressed="false" title="Touch Strip triggers Pitch Bend intervals (Toggle: T)">PITCH</button>
         </div>
         <div class="djs-touch-strip">
-          <button type="button" data-djs-strip-div="32">1/32</button>
-          <button type="button" data-djs-strip-div="16">1/16</button>
-          <button type="button" data-djs-strip-div="8">1/8</button>
-          <button type="button" data-djs-strip-div="4">1/4</button>
+          <button type="button" data-djs-strip-div="32" data-key="K" title="Hold K for 1/32">1/32</button>
+          <button type="button" data-djs-strip-div="16" data-key="J" title="Hold J for 1/16">1/16</button>
+          <button type="button" data-djs-strip-div="8" data-key="H" title="Hold H for 1/8">1/8</button>
+          <button type="button" data-djs-strip-div="4" data-key="G" title="Hold G for 1/4">1/4</button>
         </div>
       </div>
 
       <div class="djs-center-col">
         <div class="djs-pad-modes" role="group" aria-label="DJS-1000 Performance Pad mode">
-          <button type="button" class="small" data-djs-pad-mode="track" aria-pressed="true">TRACK PLAY</button>
-          <button type="button" class="small" data-djs-pad-mode="mute" aria-pressed="false">MUTE / SOLO</button>
-          <button type="button" class="small" data-djs-pad-mode="scale" aria-pressed="false">16-PAD PITCH</button>
-          <button type="button" class="small" data-djs-pad-mode="slice" aria-pressed="false">HOT ROLL</button>
+          <button type="button" class="small" data-djs-pad-mode="track" data-key="5" aria-pressed="true" title="Track Play mode (5)">TRACK PLAY</button>
+          <button type="button" class="small" data-djs-pad-mode="mute" data-key="6" aria-pressed="false" title="Mute / Solo mode (6)">MUTE / SOLO</button>
+          <button type="button" class="small" data-djs-pad-mode="scale" data-key="7" aria-pressed="false" title="16-Pad Chromatic Pitch mode (7)">16-PAD PITCH</button>
+          <button type="button" class="small" data-djs-pad-mode="slice" data-key="8" aria-pressed="false" title="Hot Roll division x pitch mode (8)">HOT ROLL</button>
         </div>
         <div id="djs-pad-grid" class="djs-pad-grid" role="group" aria-label="16 multicolor RGB performance pads"></div>
       </div>
 
       <div class="djs-deck-col" role="group" aria-label="CDJ Tempo &amp; Pro DJ Link controls">
-        <button id="djs-beat-sync" type="button" class="toggle small djs-sync-btn" aria-pressed="false" title="Lock to Pro DJ Link Bridge / Ableton Link or snap beat phase">BEAT SYNC</button>
+        <button id="djs-beat-sync" type="button" class="toggle small djs-sync-btn" data-key="B" aria-pressed="false" title="Lock to Pro DJ Link Bridge / Ableton Link or snap beat phase (B)">BEAT SYNC</button>
         <div class="djs-nudge-row">
-          <button id="djs-nudge-down" type="button" class="small" title="Phase nudge earlier (−2 ms, Shift: −0.5 ms)">NUDGE −</button>
-          <button id="djs-nudge-up" type="button" class="small" title="Phase nudge later (+2 ms, Shift: +0.5 ms)">NUDGE +</button>
+          <button id="djs-nudge-down" type="button" class="small" title="Phase nudge earlier (−2 ms, Shift: −0.5 ms · ;)">NUDGE −</button>
+          <button id="djs-nudge-up" type="button" class="small" title="Phase nudge later (+2 ms, Shift: +0.5 ms · ')">NUDGE +</button>
         </div>
         <label class="djs-tempo-wrap" for="djs-tempo-slider">
           <span class="label">TEMPO ±6% <output id="djs-tempo-out" for="djs-tempo-slider">+0.0%</output></span>
@@ -339,8 +428,8 @@ export function template(o: TemplateOptions): string {
         </label>
         <button id="djs-tempo-reset" type="button" class="small" title="Reset CDJ tempo slider to 0.0%">RESET 0%</button>
         <div class="djs-cdj-bezel">
-          <button id="djs-cue" type="button" class="djs-cue-btn" title="Cue / Reset bar phase to Beat 1.1">CUE</button>
-          <button id="djs-play" type="button" class="djs-play-btn" aria-pressed="false" title="Start / Stop sequencer transport">PLAY / PAUSE</button>
+          <button id="djs-cue" type="button" class="djs-cue-btn" data-key="N" title="Cue / Reset bar phase to Beat 1.1 (N)">CUE</button>
+          <button id="djs-play" type="button" class="djs-play-btn" aria-pressed="false" title="Start / Stop sequencer transport (Space)">PLAY / PAUSE</button>
         </div>
       </div>
     </div>
@@ -371,6 +460,7 @@ export function template(o: TemplateOptions): string {
       </div>
       <div class="grid-head-right">
         <button id="panel-power-tr" type="button" class="panel-power-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-tr-label">ON AIR</span></button>
+        <button id="booth-swap-trk" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Traktor-style Pattern Player">Pattern Player ⇄</button>
         <button id="booth-swap-djs" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Pioneer DJS-1000 Sampler/Sequencer">DJS-1000 ⇄</button>
         <span class="hint" id="grid-hint"></span>
       </div>
@@ -479,7 +569,10 @@ export function template(o: TemplateOptions): string {
 
   <section class="panel clock" id="clock" aria-labelledby="clock-title" data-source="internal" data-lock="off">
     <div class="panel-head">
-      <h2 id="clock-title">Clock</h2>
+      <div class="clock-brand">
+        <h2 id="clock-title">Clock</h2>
+        <button id="clock-sync-help" type="button" class="small clock-help-btn" title="Open visual guide for Pioneer CDJ Pro DJ Link, Ableton Link &amp; MIDI sync">Sync Guide · ?</button>
+      </div>
       <div class="seg" role="radiogroup" aria-label="Clock source">
         <label><input type="radio" name="clock-source" value="internal" checked /><span>Internal</span></label>
         <label><input type="radio" name="clock-source" value="tap" /><span>Tap</span></label>
@@ -584,7 +677,7 @@ export function template(o: TemplateOptions): string {
   ${howToModalMarkup()}
 
   <footer class="foot">
-    <span>Space play · 1–0 voices · Ctrl+1–0 echo · ⇧Q/W/E group echo · ⌥G/V/F groove/fill · A–K / Z–, steps · Y–P kits · ? how to</span>
-    <span>TR-inspired drum machine for Ableton Link &amp; the Pioneer DJ booth</span>
+    <span>Space play · ~ cycle decks · TR: 1–0 voices, A–K/Z–, steps · DJS: 1–4/Q–R/A–F/Z–V 16 pads, 5–8 modes, 9/0 scenes · RMX: 1–4 pads, 5–0 rolls, Q/W/E kills, Y–P/A–G FX, Hold R drop · ? guide</span>
+    <span>TR drum machine, DJS-1000 deck &amp; RMX-1000 station for Ableton Link &amp; Pioneer DJ sync</span>
   </footer>`;
 }

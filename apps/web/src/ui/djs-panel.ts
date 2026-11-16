@@ -112,8 +112,19 @@ function buildDefaultScenes(): SceneSlot[] {
     "#ec4899",
     "#38bdf8",
   ];
+  const sceneIds = [
+    "night-shift",
+    "circuit-break",
+    "warehouse-break",
+    "warehouse-jack",
+    "sub-basement-rumble",
+    "uk-sub-break",
+    "parisian-filter",
+    "euphoric-break",
+  ];
   return Array.from({ length: 8 }, (_, idx) => {
-    const preset = PRESETS[(idx + 1) % PRESETS.length]!;
+    const preset =
+      PRESETS.find((p) => p.id === sceneIds[idx]) ?? PRESETS[(idx + 1) % PRESETS.length]!;
     const s = preset.spec();
     // Pre-populate a 4-bar 64-step club progression with subtle Bar D turnaround on Scene slots
     s.variation = 5;
@@ -137,6 +148,25 @@ function buildDefaultScenes(): SceneSlot[] {
   });
 }
 
+export const DJS_PAD_KEYS = [
+  "1",
+  "2",
+  "3",
+  "4",
+  "Q",
+  "W",
+  "E",
+  "R",
+  "A",
+  "S",
+  "D",
+  "F",
+  "Z",
+  "X",
+  "C",
+  "V",
+] as const;
+
 export function defaultDjsSpec(): PatternSpec {
   return cloneSpec(buildDefaultScenes()[0]!.spec);
 }
@@ -155,6 +185,7 @@ export class DjsPanel {
   private stripActive = false;
   private padButtons: HTMLButtonElement[] = [];
   private stepButtons: HTMLButtonElement[] = [];
+  private flashTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly root: HTMLElement,
@@ -202,6 +233,7 @@ export class DjsPanel {
       b.type = "button";
       b.className = "djs-pad";
       b.dataset.djsPad = String(i);
+      b.dataset.key = DJS_PAD_KEYS[i]!;
       b.innerHTML =
         `<span class="djs-pad-idx">${i + 1}</span>` +
         `<span class="djs-pad-main"></span>` +
@@ -494,6 +526,116 @@ export class DjsPanel {
     if (Math.abs(this.pitchPct) < 0.01) {
       this.baseBpm = bpm;
     }
+  }
+
+  private flashElement(el: HTMLElement | undefined, holdUntilRelease = false): void {
+    if (!el) return;
+    const prev = this.flashTimers.get(el);
+    if (prev !== undefined) clearTimeout(prev);
+    el.classList.add("kb-flash");
+    if (!holdUntilRelease) {
+      const t = setTimeout(() => {
+        el.classList.remove("kb-flash");
+        this.flashTimers.delete(el);
+      }, 170);
+      this.flashTimers.set(el, t);
+    }
+  }
+
+  /** Keyboard 4x4 pad trigger (Pads 0..15 mapped to 1..4 / Q..R / A..F / Z..V). */
+  triggerPadFromKey(idx: number, shiftKey: boolean, eventTimeMs: number): string {
+    if (idx < 0 || idx >= 16) return "";
+    this.onPadDown(idx, shiftKey, eventTimeMs);
+    const btn = this.padButtons[idx];
+    const isHeldRoll = this.activeRollPad === idx;
+    this.flashElement(btn, isHeldRoll);
+    const main = btn?.querySelector(".djs-pad-main")?.textContent ?? `Pad ${idx + 1}`;
+    const sub = btn?.querySelector(".djs-pad-sub")?.textContent ?? "";
+    return `DJS Pad ${idx + 1}: ${main}${sub ? ` (${sub})` : ""}`;
+  }
+
+  /** Keyboard Touch Strip trigger (G/H/J/K -> 1/4, 1/8, 1/16, 1/32). */
+  holdStripDivFromKey(div: RollDivision, eventTimeMs: number): string {
+    this.stripActive = true;
+    const btn = this.root.querySelector<HTMLButtonElement>(`[data-djs-strip-div="${div}"]`) ?? undefined;
+    if (this.stripMode === "repeat") {
+      this.engageRoll(this.cb.getSelectedVoice(), div, 0, eventTimeMs);
+      this.flashElement(btn, true);
+      this.render();
+      return `Touch Strip Repeat 1/${div}`;
+    }
+    const semi = div === 4 ? -7 : div === 8 ? -3 : div === 16 ? 4 : 7;
+    void this.fireVoiceHit(this.cb.getSelectedVoice(), semi / 12, true, eventTimeMs);
+    this.flashElement(btn, false);
+    this.render();
+    return `Touch Strip Pitch ${semi > 0 ? "+" : ""}${semi} st`;
+  }
+
+  /** Releases any keyboard-held Hot Roll pad or Touch Strip Note Repeat. */
+  releaseKeyHold(): void {
+    for (const el of this.root.querySelectorAll<HTMLElement>(".kb-flash")) {
+      if (!this.flashTimers.has(el)) el.classList.remove("kb-flash");
+    }
+    if (this.activeRollPad >= 0 || this.stripActive) {
+      this.stopActiveRoll();
+      this.render();
+    }
+  }
+
+  setPadMode(mode: DjsPadMode): void {
+    this.stopActiveRoll();
+    this.padMode = mode;
+    this.render();
+  }
+
+  get currentPadMode(): DjsPadMode {
+    return this.padMode;
+  }
+
+  toggleStripMode(): DjsStripMode {
+    this.stopActiveRoll();
+    this.stripMode = this.stripMode === "repeat" ? "pitch" : "repeat";
+    this.render();
+    return this.stripMode;
+  }
+
+  toggleQuantize(): boolean {
+    this.quantize = !this.quantize;
+    this.render();
+    return this.quantize;
+  }
+
+  toggleLiveRec(): boolean {
+    this.liveRec = !this.liveRec;
+    this.render();
+    return this.liveRec;
+  }
+
+  selectScene(idx: number): string {
+    const wrapped = ((idx % this.scenes.length) + this.scenes.length) % this.scenes.length;
+    const slot = this.scenes[wrapped];
+    if (!slot) return "";
+    this.activeScene = wrapped;
+    const copy = cloneSpec(slot.spec);
+    this.baseBpm = copy.bpm;
+    this.pitchPct = 0;
+    this.cb.onLoadScene(copy, slot.name);
+    this.render();
+    return slot.name;
+  }
+
+  stepScene(delta: number): string {
+    return this.selectScene(this.activeScene + delta);
+  }
+
+  captureScene(): string {
+    const cur = cloneSpec(this.cb.getSpec());
+    const slot = this.scenes[this.activeScene];
+    if (!slot) return "";
+    slot.spec = cur;
+    slot.name = `S${this.activeScene + 1} · Custom ${Math.round(cur.bpm)}`;
+    this.render();
+    return slot.name;
   }
 
   render(): void {
