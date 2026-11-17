@@ -1,14 +1,14 @@
 <div align="center">
   <img src="docs/assets/logo.svg" alt="player5 — Local Prototype · 3 Friends: 2x B2B DJs + 1x Laptop Drum Machine" width="560" />
   <br /><br />
-  <img src="docs/assets/hero-retrowave-b2b.jpg" alt="Three friends at a 4-deck club DJ setup: two friends DJing B2B while the 3rd friend hooks up a laptop drum machine" width="100%" />
+  <img src="docs/assets/hero-retrowave-b2b.jpg" alt="View from behind the booth in a Berlin underground warehouse techno club: two DJs mixing B2B across 4 decks while the 3rd friend stands beside them on stage playing a wired laptop drum machine in front of a locked-in crowd" width="100%" />
 
   <h3>
-    Three friends at a 4-deck Pioneer setup. Two are DJing B2B.<br />
-    <em>What does Friend #3 do besides stand behind the booth waiting 20 minutes for a turn?</em>
+    Berlin booth. Two friends mixing B2B on 4 decks.<br />
+    <em>What does Friend #3 do besides stand on stage waiting 20 minutes for a turn?</em>
   </h3>
   <p>
-    Hook up your laptop, lock to the master clock, and become <strong>Player #5</strong> — layering heavy techno sub-bass, breakbeats, live pad rolls, and one-button buildup drops right on top of the mix.
+    Hook up your laptop straight into the rig, lock to the master clock, and become <strong>Player #5</strong> — layering heavy techno sub-bass, breakbeats, live pad rolls, and post-filter buildup drops right into the club sound system.
   </p>
   <p>
     🎬 <a href="docs/assets/player5-overview.mp4"><strong>Watch the 18-Second Live Audio + Video Overview (<code>docs/assets/player5-overview.mp4</code>)</strong></a>

@@ -625,6 +625,9 @@ const clock = new ClockPanel(
     onExternalTransport: (wantPlaying) => {
       if (wantPlaying !== audio.playing) void togglePlay(true);
     },
+    onLiveBpm: (bpm) => {
+      if (clock.following && !bpmEditing) bpmInput.value = bpm.toFixed(2);
+    },
   },
   { bridge: bridgeOk, midi: midiOk },
 );

@@ -27,6 +27,8 @@ export interface ClockPanelHost {
   getPatternBpm?(): number;
   /** Called when Ableton Link Start/Stop Sync starts or stops transport remotely. */
   onExternalTransport?(playing: boolean): void;
+  /** Called with live external tempo while audio is still stopped. */
+  onLiveBpm?(bpm: number): void;
 }
 
 const monoEpochMs = (): number => performance.timeOrigin + performance.now();
@@ -489,7 +491,12 @@ export class ClockPanel {
       onTimeline: (t) => {
         this.timeline = t;
         this.host.audio.setClockMode(PRECISION_MODE[t.precision]);
-        this.renderStatus();
+        if (this.audioState !== "running" && t.locked) {
+          this.render(this.host.audio.lastStatus);
+          this.host.onLiveBpm?.(t.bpm);
+        } else {
+          this.renderStatus();
+        }
       },
       onDeviceChange: () => this.host.audio.resync(),
       onTransport: (playing) => {
@@ -617,10 +624,22 @@ export class ClockPanel {
   private render(status: EngineStatus | null): void {
     const running = this.audioState === "running" && status !== null;
     const following = this.following;
+    const bridgeLiveBpm =
+      following && (this.source === "link" || this.source === "bridge") && this.timeline?.locked
+        ? this.timeline.bpm
+        : null;
     const lock = !running ? "off" : !following ? "internal" : status.locked ? "locked" : "searching";
     this.el.root.dataset.lock = lock;
-    this.el.tempo.textContent = running ? status.tempo.toFixed(2) : "—";
-    this.el.root.dataset.tempo = running ? status.tempo.toFixed(3) : "";
+    this.el.tempo.textContent = running
+      ? status.tempo.toFixed(2)
+      : bridgeLiveBpm !== null
+        ? bridgeLiveBpm.toFixed(2)
+        : "—";
+    this.el.root.dataset.tempo = running
+      ? status.tempo.toFixed(3)
+      : bridgeLiveBpm !== null
+        ? bridgeLiveBpm.toFixed(3)
+        : "";
     const beat = running ? (this.host.audio.beatHeardAt(performance.now()) ?? status.beat) : NaN;
     this.el.root.dataset.beat = running ? beat.toFixed(4) : "";
     this.el.root.dataset.beatAt = running ? performance.now().toFixed(2) : "";
@@ -628,7 +647,9 @@ export class ClockPanel {
       running && status.armed
         ? "armed · bar 1"
         : lock === "off"
-          ? "audio off"
+          ? bridgeLiveBpm !== null
+            ? "ready · press Play"
+            : "audio off"
           : lock === "internal"
             ? "internal"
             : lock === "locked"

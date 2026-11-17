@@ -445,6 +445,11 @@ export class TraktorPanel {
   private buildupPointerDownMs = 0;
   private buildupRaf = 0;
   private dropFlashUntil = 0;
+  // Post-filter drop tail: smoothly rolls out echo/noise/spiral/reverb over 1 bar after drop
+  private dropTailMacro: BuildupMacroId | null = null;
+  private dropTailStartMs = 0;
+  private dropTailStartLevel = 0;
+  private dropTailProgress = 0;
 
   // Optional user-loaded local audio sample for heavy custom sub/hit layering
   private customSampleBuffer: AudioBuffer | null = null;
@@ -658,10 +663,12 @@ export class TraktorPanel {
       this.releaseIntoDrop();
       return;
     }
+    this.dropTailMacro = null;
+    this.dropTailProgress = 0;
     this.activeBuildup = macro;
     this.buildupStartMs = performance.now();
     this.buildupPointerDownMs = fromPointerOrKeyDown ? this.buildupStartMs : 0;
-    this.buildupProgress = 0.28;
+    this.buildupProgress = 0.02; // start seamlessly from near-dry so noise/echo swells in sync
     void this.cb.audio.ensureStarted().catch(() => {});
     this.pushBuildupDsp(this.buildupProgress);
     this.scheduleBuildupTick();
@@ -681,7 +688,9 @@ export class TraktorPanel {
   }
 
   releaseIntoDrop(): void {
-    const wasBuilding = this.activeBuildup !== null;
+    const prevMacro = this.activeBuildup;
+    const prevProgress = this.buildupProgress;
+    const wasBuilding = prevMacro !== null;
     this.activeBuildup = null;
     this.buildupProgress = 0;
     this.buildupPointerDownMs = 0;
@@ -690,20 +699,28 @@ export class TraktorPanel {
       this.buildupRaf = 0;
     }
 
-    // Restore clean base RMX state (filter wide open, echo/noise cleared, full sub restored!)
-    const cleanRmx = this.cb.isRmxBypassed() ? defaultRmxState() : { ...this.cb.getBaseRmxState() };
-    this.cb.audio.setRmxState(cleanRmx);
+    if (this.powered && wasBuilding && prevMacro) {
+      // Open low-end immediately on Beat 1 while rolling a gradually disappearing post-filter tail
+      this.dropTailMacro = prevMacro;
+      this.dropTailStartMs = performance.now();
+      this.dropTailStartLevel = Math.max(0.35, prevProgress);
+      this.dropTailProgress = this.dropTailStartLevel;
+      this.pushDropTailDsp(prevMacro, this.dropTailProgress);
+      this.scheduleBuildupTick();
 
-    // Fire punchy downbeat Sub Kick + Crash/Open-Hat impact onto the playing pattern!
-    if (this.powered) {
-      if (wasBuilding) {
-        void this.cb.audio.triggerVoice("kick", 1.0).catch(() => {});
-        void this.cb.audio.triggerVoice("open_hat", 0.92).catch(() => {});
-        if (this.customSampleBuffer) this.fireCustomSample(1.0);
-        this.dropFlashUntil = performance.now() + 900;
-        this.cb.onSay("DROP! Filter wide open and full sub-bass restored onto active pattern.");
-      }
+      // Fire punchy downbeat Sub Kick + Crash/Open-Hat impact onto the playing pattern!
+      void this.cb.audio.triggerVoice("kick", 1.0).catch(() => {});
+      void this.cb.audio.triggerVoice("open_hat", 0.92).catch(() => {});
+      if (this.customSampleBuffer) this.fireCustomSample(1.0);
+      this.dropFlashUntil = performance.now() + 1400;
+      this.cb.onSay("DROP! Full sub-bass slammed in — post-filter tail rolling out cleanly.");
       this.flashEl("#trk-drop-btn");
+    } else {
+      this.dropTailMacro = null;
+      this.dropTailProgress = 0;
+      const cleanRmx = this.cb.isRmxBypassed() ? defaultRmxState() : { ...this.cb.getBaseRmxState() };
+      this.cb.audio.setRmxState(cleanRmx);
+      if (this.powered) this.flashEl("#trk-drop-btn");
     }
     this.render();
   }
@@ -713,10 +730,12 @@ export class TraktorPanel {
       cancelAnimationFrame(this.buildupRaf);
       this.buildupRaf = 0;
     }
-    if (this.activeBuildup !== null) {
+    if (this.activeBuildup !== null || this.dropTailMacro !== null) {
       this.activeBuildup = null;
       this.buildupProgress = 0;
       this.buildupPointerDownMs = 0;
+      this.dropTailMacro = null;
+      this.dropTailProgress = 0;
       const cleanRmx = this.cb.isRmxBypassed() ? defaultRmxState() : { ...this.cb.getBaseRmxState() };
       this.cb.audio.setRmxState(cleanRmx);
     }
@@ -725,54 +744,110 @@ export class TraktorPanel {
   private scheduleBuildupTick(): void {
     if (this.buildupRaf) cancelAnimationFrame(this.buildupRaf);
     const step = (now: number) => {
-      if (!this.activeBuildup) {
-        this.buildupRaf = 0;
+      const bpm = Math.max(60, Math.min(240, this.cb.getSpec().bpm || 128));
+      if (this.activeBuildup) {
+        // Tempo-synced 2-bar (8-beat) gradual rise from 2% -> 100% peak tension
+        const twoBarsSec = (8 * 60) / bpm;
+        const elapsedSec = Math.max(0, (now - this.buildupStartMs) / 1000);
+        this.buildupProgress = Math.min(1, 0.02 + (elapsedSec / twoBarsSec) * 0.98);
+        this.pushBuildupDsp(this.buildupProgress);
+        this.renderBuildupMeterOnly();
+        this.buildupRaf = requestAnimationFrame(step);
         return;
       }
-      // Smooth 4-second dramatic ramp from 28% -> 100% peak tension
-      const elapsedSec = Math.max(0, (now - this.buildupStartMs) / 1000);
-      this.buildupProgress = Math.min(1, 0.28 + (elapsedSec / 4.0) * 0.72);
-      this.pushBuildupDsp(this.buildupProgress);
-      this.renderBuildupMeterOnly();
-      this.buildupRaf = requestAnimationFrame(step);
+      if (this.dropTailMacro) {
+        // Tempo-synced 1-bar (4-beat) rolling post-filter decay tail
+        const oneBarSec = (4 * 60) / bpm;
+        const elapsedSec = Math.max(0, (now - this.dropTailStartMs) / 1000);
+        const norm = Math.min(1, elapsedSec / oneBarSec);
+        const decay = Math.pow(1 - norm, 1.85);
+        this.dropTailProgress = this.dropTailStartLevel * decay;
+        if (norm >= 1 || this.dropTailProgress < 0.01) {
+          this.dropTailMacro = null;
+          this.dropTailProgress = 0;
+          const cleanRmx = this.cb.isRmxBypassed() ? defaultRmxState() : { ...this.cb.getBaseRmxState() };
+          this.cb.audio.setRmxState(cleanRmx);
+          this.renderBuildupMeterOnly();
+          this.buildupRaf = 0;
+          return;
+        }
+        this.pushDropTailDsp(this.dropTailMacro, this.dropTailProgress);
+        this.renderBuildupMeterOnly();
+        this.buildupRaf = requestAnimationFrame(step);
+        return;
+      }
+      this.buildupRaf = 0;
     };
     this.buildupRaf = requestAnimationFrame(step);
   }
 
   private pushBuildupDsp(p: number): void {
     const fx: RmxState = { ...defaultRmxState() };
+    const swell = Math.pow(Math.max(0, Math.min(1, p)), 1.15);
     switch (this.activeBuildup) {
       case "echo_hpf":
         fx.sceneFx = "hpf_echo";
-        fx.sceneAmount = 0.32 + p * 0.62;
-        fx.sceneSub = 0.58 + p * 0.3;
-        fx.isoLow = -Math.round(14 + p * 34); // sweeps sub out smoothly so the drop hits massive!
-        fx.killLow = p > 0.72;
+        fx.sceneAmount = 0.04 + swell * 0.9;
+        fx.sceneSub = 0.35 + swell * 0.55;
+        fx.isoLow = -Math.round(swell * 48); // sweeps sub out smoothly in sync
+        fx.killLow = swell > 0.78;
         break;
       case "noise_filter":
         fx.sceneFx = "noise";
-        fx.sceneAmount = 0.26 + p * 0.68;
-        fx.sceneSub = 0.45 + p * 0.48;
-        fx.sceneSub2 = 0.35 + p * 0.6;
-        fx.isoLow = -Math.round(10 + p * 32);
-        fx.killLow = p > 0.78;
+        fx.sceneAmount = 0.02 + swell * 0.94; // builds noise jet gradually from 0
+        fx.sceneSub = 0.25 + swell * 0.68; // resonance rises smoothly
+        fx.sceneSub2 = 0.3 + swell * 0.65; // rhythmic beat-synced noise pump
+        fx.isoLow = -Math.round(swell * 42);
+        fx.killLow = swell > 0.82;
         break;
       case "spiral_roll":
         fx.sceneFx = "spiral_up";
-        fx.sceneAmount = 0.3 + p * 0.64;
-        fx.sceneSub = 0.5 + p * 0.38;
+        fx.sceneAmount = 0.04 + swell * 0.9;
+        fx.sceneSub = 0.3 + swell * 0.58;
         fx.xpadVoice = "snare";
         fx.xpadRolling = true;
         fx.xpadQuantize = true;
-        fx.xpadRollDiv = p < 0.48 ? 8 : p < 0.82 ? 16 : 32;
-        fx.xpadPitch = Math.round(p * 6) / 12;
-        fx.isoLow = -Math.round(12 + p * 30);
+        fx.xpadRollDiv = swell < 0.42 ? 8 : swell < 0.76 ? 16 : 32;
+        fx.xpadPitch = Math.round(swell * 6) / 12;
+        fx.isoLow = -Math.round(swell * 42);
         break;
       case "sub_reverb":
         fx.sceneFx = "reverb_up";
-        fx.sceneAmount = 0.35 + p * 0.6;
-        fx.sceneSub = 0.65;
-        fx.killLow = true;
+        fx.sceneAmount = 0.05 + swell * 0.9;
+        fx.sceneSub = 0.38 + swell * 0.52;
+        fx.isoLow = -Math.round(swell * 48);
+        fx.killLow = swell > 0.55;
+        break;
+    }
+    this.cb.audio.setRmxState(fx);
+  }
+
+  /** Rolling post-filter drop tail: sub/lows are 100% wide open while echo/noise/spiral wash fades smoothly. */
+  private pushDropTailDsp(macro: BuildupMacroId, tail: number): void {
+    const fx: RmxState = { ...defaultRmxState() };
+    fx.isoLow = 0;
+    fx.killLow = false;
+    switch (macro) {
+      case "echo_hpf":
+        fx.sceneFx = "hpf_echo";
+        fx.sceneAmount = tail * 0.72;
+        fx.sceneSub = 0.3 + tail * 0.45;
+        break;
+      case "noise_filter":
+        fx.sceneFx = "noise";
+        fx.sceneAmount = tail * 0.65;
+        fx.sceneSub = 0.2 + tail * 0.45;
+        fx.sceneSub2 = 0.4 + tail * 0.5;
+        break;
+      case "spiral_roll":
+        fx.sceneFx = "spiral_down";
+        fx.sceneAmount = tail * 0.68;
+        fx.sceneSub = 0.35 + tail * 0.4;
+        break;
+      case "sub_reverb":
+        fx.sceneFx = "reverb_down";
+        fx.sceneAmount = tail * 0.75;
+        fx.sceneSub = 0.35 + tail * 0.45;
         break;
     }
     this.cb.audio.setRmxState(fx);
@@ -914,12 +989,15 @@ export class TraktorPanel {
     const fill = this.root.querySelector<HTMLElement>("#trk-buildup-fill");
     const status = this.root.querySelector<HTMLElement>("#trk-buildup-status");
     const dropBtn = this.root.querySelector<HTMLButtonElement>("#trk-drop-btn");
-    const pct = Math.round(this.buildupProgress * 100);
-    if (fill) fill.style.width = `${this.activeBuildup ? pct : 0}%`;
+    const pct = Math.round((this.activeBuildup ? this.buildupProgress : this.dropTailProgress) * 100);
+    if (fill) fill.style.width = `${this.activeBuildup || this.dropTailMacro ? pct : 0}%`;
     if (status) {
       if (this.activeBuildup) {
         status.textContent = `${BUILDUP_LABELS[this.activeBuildup]} · ${pct}% — CLICK DROP [R]`;
         status.dataset.state = "building";
+      } else if (this.dropTailMacro) {
+        status.textContent = `DROPPED ON ACTIVE PATTERN · POST-FILTER TAIL ${pct}%`;
+        status.dataset.state = "dropped";
       } else if (performance.now() < this.dropFlashUntil) {
         status.textContent = "DROPPED ON ACTIVE PATTERN · FULL SUB LIVE";
         status.dataset.state = "dropped";
