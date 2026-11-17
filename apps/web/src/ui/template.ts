@@ -70,11 +70,11 @@ export function template(o: TemplateOptions): string {
   <header class="top">
     <h1 class="logo">player<span>5</span></h1>
     <div class="mode-tabs" role="group" aria-label="Surface mode">
-      <button id="mode-seq" type="button" class="mode-tab" aria-pressed="true" title="Classic TR-style 16/64-step drum machine">Step Sequencer</button>
-      <button id="mode-traktor" type="button" class="mode-tab" aria-pressed="false" title="Traktor Pro 4+ inspired minimalist Pattern Player with heavy sub-bass, breakbeats &amp; 1-button Buildup-to-Drop FX">Pattern Player</button>
-      <button id="mode-djs" type="button" class="mode-tab" aria-pressed="false" title="Pioneer DJ DJS-1000 CDJ-format standalone DJ sampler &amp; 64-step sequencer">DJS-1000 Deck</button>
-      <button id="mode-rmx" type="button" class="mode-tab" aria-pressed="false" title="Pioneer RMX-1000 4-section remix station">RMX-1000 Station</button>
-      <button id="mode-booth" type="button" class="mode-tab" aria-pressed="false" title="MacBook Air 13-inch split performance view: Sequencer/Pattern Player/DJS + RMX-1000 side by side (Shift + ~)">Booth Split</button>
+      <button id="mode-seq" type="button" class="mode-tab" data-key="⌥1" aria-pressed="true" title="Switch to TR-style 16/64-step drum machine (⌥1 or &#96;)">Step Sequencer</button>
+      <button id="mode-traktor" type="button" class="mode-tab" data-key="⌥2" aria-pressed="false" title="Switch to Traktor Pro 4+ Pattern Player (⌥2 or &#96;)">Pattern Player</button>
+      <button id="mode-djs" type="button" class="mode-tab" data-key="⌥3" aria-pressed="false" title="Switch to Pioneer DJS-1000 standalone sampler &amp; 64-step sequencer (⌥3 or &#96;)">DJS-1000 Deck</button>
+      <button id="mode-rmx" type="button" class="mode-tab" data-key="⌥4" aria-pressed="false" title="Switch to Pioneer RMX-1000 remix station (⌥4 or &#96;)">RMX-1000 Station</button>
+      <button id="mode-booth" type="button" class="mode-tab" data-key="⌥5" aria-pressed="false" title="MacBook Air 13-inch split performance view (⌥5 or Shift + ~)">Booth Split</button>
     </div>
     <select id="theme-select" class="theme-select" aria-label="Visual color scheme" title="Switch hardware visual &amp; color scheme">
       <option value="default">8O8 Booth</option>
@@ -109,20 +109,21 @@ export function template(o: TemplateOptions): string {
       ${knob("flam", "Flam")}
     </div>
     <div class="tools">
-      <div class="machine-switches" role="group" aria-label="Machine audio switches">
-        <span class="mach-group-label" aria-hidden="true">ON AIR</span>
-        <button id="power-tr" type="button" class="mach-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF">
-          <i class="mach-led" aria-hidden="true"></i><span>TR Drums</span>
+      <div class="machine-switches" role="group" aria-label="Machine Active or Passive switches">
+        <span class="mach-group-label" aria-hidden="true" title="Toggle each machine ACTIVE or PASSIVE (&#92; toggles current · ⌥⇧1–4 toggles any)">MACHINES</span>
+        <button id="power-tr" type="button" class="mach-btn mach-tr" aria-pressed="true" title="Toggle TR Drums ACTIVE / PASSIVE (⌥⇧1 · or &#92; when viewing TR)">
+          <i class="mach-led" aria-hidden="true"></i><span>TR Drums</span><em id="power-tr-state" class="mach-state">ACTIVE</em>
         </button>
-        <button id="power-traktor" type="button" class="mach-btn mach-trk" aria-pressed="false" title="Toggle Traktor-style Pattern Player audio ON or OFF">
-          <i class="mach-led" aria-hidden="true"></i><span>Pattern Player</span>
+        <button id="power-traktor" type="button" class="mach-btn mach-trk" aria-pressed="false" title="Toggle Pattern Player ACTIVE / PASSIVE (⌥⇧2 · or &#92; when viewing Pattern Player)">
+          <i class="mach-led" aria-hidden="true"></i><span>Pattern Player</span><em id="power-trk-state" class="mach-state">PASSIVE</em>
         </button>
-        <button id="power-djs" type="button" class="mach-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 standalone sequencer audio ON or OFF">
-          <i class="mach-led" aria-hidden="true"></i><span>DJS-1000</span>
+        <button id="power-djs" type="button" class="mach-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 ACTIVE / PASSIVE (⌥⇧3 · or &#92; when viewing DJS-1000)">
+          <i class="mach-led" aria-hidden="true"></i><span>DJS-1000</span><em id="power-djs-state" class="mach-state">PASSIVE</em>
         </button>
-        <button id="power-rmx" type="button" class="mach-btn mach-rmx" aria-pressed="true" title="Toggle Pioneer RMX-1000 FX station ON or Bypass">
-          <i class="mach-led" aria-hidden="true"></i><span>RMX-1000</span>
+        <button id="power-rmx" type="button" class="mach-btn mach-rmx" aria-pressed="true" title="Toggle Pioneer RMX-1000 FX ACTIVE / PASSIVE (⌥⇧4 · or &#92; when viewing RMX-1000)">
+          <i class="mach-led" aria-hidden="true"></i><span>RMX-1000</span><em id="power-rmx-state" class="mach-state">ACTIVE</em>
         </button>
+        <output id="kb-target-pill" class="kb-target-pill" data-passive="false" aria-live="polite" title="Shows which ACTIVE machine currently receives your keyboard hotkeys (⌥1–5 switch view · ⌥~ swap Booth focus · &#92; toggle Active/Passive)">⌨ KEYS → TR DRUMS</output>
       </div>
       <button id="flam-mode" type="button" class="toggle" aria-pressed="false" title="While on, tapping a step toggles its flam">Flam edit</button>
       <select id="preset" aria-label="Load a preset pattern">
@@ -149,9 +150,10 @@ export function template(o: TemplateOptions): string {
         <output id="rmx-readout" class="rmx-readout" aria-live="polite">BPF ECHO 0% · X-PAD SNARE 1/8</output>
       </div>
       <div class="rmx-head-actions">
-        <button id="panel-power-rmx" type="button" class="panel-power-btn mach-rmx" aria-pressed="true" title="Toggle RMX-1000 FX station ON or Bypass"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-rmx-label">FX ON</span></button>
+        <button id="panel-power-rmx" type="button" class="panel-power-btn mach-rmx" aria-pressed="true" title="Toggle RMX-1000 ACTIVE / PASSIVE (&#92; or ⌥⇧4)"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-rmx-label">ACTIVE [&#92;]</span></button>
+        <button id="booth-focus-rmx" type="button" class="small booth-only-btn kb-focus-btn" aria-pressed="false" title="Route keyboard hotkeys to RMX-1000 in Booth Split (⌥~)">⌨ Keys [⌥~]</button>
         <button id="rmx-ext-in" type="button" class="toggle small"${o.single ? " hidden" : ""} aria-pressed="false" title="Route external stereo audio input (loopback / mixer return) through the RMX-1000 FX engine">EXT IN</button>
-        <button id="rmx-reset" type="button" class="small" title="Reset all RMX-1000 FX parameters">Reset FX</button>
+        <button id="rmx-reset" type="button" class="small" data-key="." title="Reset all RMX-1000 FX parameters (.)">Reset FX</button>
       </div>
     </div>
 
@@ -292,13 +294,25 @@ export function template(o: TemplateOptions): string {
         <output id="trk-readout" class="trk-readout" aria-live="polite">BERLIN SUB RUMBLE · SUB RUMBLE 16TH</output>
       </div>
       <div class="trk-head-actions">
-        <button id="panel-power-traktor" type="button" class="panel-power-btn mach-trk" aria-pressed="false" title="Toggle Pattern Player audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-trk-label">OFF</span></button>
+        <button id="panel-power-traktor" type="button" class="panel-power-btn mach-trk" aria-pressed="false" title="Toggle Pattern Player ACTIVE / PASSIVE (&#92; or ⌥⇧2)"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-trk-label">PASSIVE [&#92;]</span></button>
         <button id="booth-swap-tr-from-trk" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
         <button id="trk-kick-cut" type="button" class="toggle small" data-key="." aria-pressed="false" title="Mute 4/4 Kick so heavy sub-bass, breaks &amp; tops layer cleanly over a playing CDJ track (.)">KICK CUT</button>
         <button id="trk-ducking" type="button" class="toggle small" data-key="U" aria-pressed="false" title="Traktor-style sidechain pump envelope around the downbeat (U)">DUCKING</button>
         <button id="trk-load-sample" type="button" class="small" title="Load a local WAV/MP3/OGG bass or percussion one-shot from your laptop">+ Load WAV</button>
         <input id="trk-sample-file" type="file" accept="audio/*" hidden />
       </div>
+    </div>
+
+    <div class="trk-hotkey-strip" aria-label="Pattern Player keyboard shortcuts">
+      <span class="trk-hk-title">PATTERN PLAYER KEYS</span>
+      <span><kbd>1–0</kbd><kbd>−</kbd><kbd>=</kbd> 12 Patterns</span>
+      <span><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>T</kbd> Buildup FX</span>
+      <span><kbd>R</kbd> Drop!</span>
+      <span><kbd>Y</kbd>/<kbd>I</kbd> Kit</span>
+      <span><kbd>⌥B</kbd>/<kbd>⌥N</kbd> Pitch</span>
+      <span><kbd>.</kbd> Kick Cut · <kbd>U</kbd> Duck</span>
+      <span><kbd>O</kbd> Stem · <kbd>A–K</kbd>/<kbd>Z–,</kbd> Steps 1–16</span>
+      <span><kbd>&#92;</kbd> Active/Passive</span>
     </div>
 
     <div class="trk-controls-bar" role="group" aria-label="Pattern Player Kit and Sound Shaping">
@@ -315,7 +329,7 @@ export function template(o: TemplateOptions): string {
         <input id="trk-bass" type="range" min="0" max="1" step="0.02" value="0.75" />
       </label>
       <label class="knob" for="trk-pitch">
-        <span class="knob-label">PITCH [B/N] <output id="trk-pitch-out" for="trk-pitch">0 st</output></span>
+        <span class="knob-label">PITCH [⌥B / ⌥N] <output id="trk-pitch-out" for="trk-pitch">0 st</output></span>
         <input id="trk-pitch" type="range" min="-12" max="12" step="1" value="0" />
       </label>
       <label class="knob" for="trk-decay">
@@ -349,12 +363,12 @@ export function template(o: TemplateOptions): string {
 
     <div class="trk-seq-footer" role="group" aria-label="Pattern Player 2x8 16-step sequencer">
       <div class="trk-seq-bar">
-        <span id="trk-stem-label" class="trk-stem-label">SUB BASS (LT) · 16 STEPS</span>
-        <div class="trk-stem-tabs" role="group" aria-label="Select Pattern Player stem layer to edit">
-          <button type="button" class="toggle small" data-trk-stem="sub" aria-pressed="true" title="Edit Sub Bass (Low Tom) steps">SUB BASS</button>
-          <button type="button" class="toggle small" data-trk-stem="snare" aria-pressed="false" title="Edit Snare / Breakbeat steps">SNARE / BREAK</button>
-          <button type="button" class="toggle small" data-trk-stem="hats" aria-pressed="false" title="Edit Hi-Hat steps">HI-HATS</button>
-          <button type="button" class="toggle small" data-trk-stem="perc" aria-pressed="false" title="Edit Clap / Perc steps">CLAP / PERC</button>
+        <span id="trk-stem-label" class="trk-stem-label">SUB BASS (LT) · 16 STEPS [O = NEXT STEM]</span>
+        <div class="trk-stem-tabs" role="group" aria-label="Select Pattern Player stem layer to edit (O cycles stems)">
+          <button type="button" class="toggle small" data-trk-stem="sub" aria-pressed="true" title="Edit Sub Bass (Low Tom) steps (Press O to cycle stems)">SUB BASS</button>
+          <button type="button" class="toggle small" data-trk-stem="snare" aria-pressed="false" title="Edit Snare / Breakbeat steps (Press O to cycle stems)">SNARE / BREAK</button>
+          <button type="button" class="toggle small" data-trk-stem="hats" aria-pressed="false" title="Edit Hi-Hat steps (Press O to cycle stems)">HI-HATS</button>
+          <button type="button" class="toggle small" data-trk-stem="perc" aria-pressed="false" title="Edit Clap / Perc steps (Press O to cycle stems)">CLAP / PERC</button>
           <button id="trk-reset-pat" type="button" class="small" data-key="P" title="Restore active pattern to factory steps (P)">Reset Steps</button>
         </div>
       </div>
@@ -369,7 +383,7 @@ export function template(o: TemplateOptions): string {
         <span id="djs-sync-badge" class="djs-sync-badge" data-locked="false">INT MASTER</span>
       </div>
       <div class="djs-head-actions">
-        <button id="panel-power-djs" type="button" class="panel-power-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-djs-label">OFF</span></button>
+        <button id="panel-power-djs" type="button" class="panel-power-btn mach-djs" aria-pressed="false" title="Toggle Pioneer DJS-1000 ACTIVE / PASSIVE (&#92; or ⌥⇧3)"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-djs-label">PASSIVE [&#92;]</span></button>
         <button id="booth-swap-tr" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to TR-REC 10x16 Step Grid">TR Grid ⇄</button>
         <button id="djs-quantize" type="button" class="toggle small" data-key="Y" aria-pressed="true" title="Snap DJS-1000 pads &amp; rolls to the beat grid (Y)">QUANTIZE</button>
         <button id="djs-live-rec" type="button" class="toggle small djs-rec-btn" data-key="U" aria-pressed="false" title="Overdub live pad hits into the active bar (U)">LIVE REC</button>
@@ -459,7 +473,7 @@ export function template(o: TemplateOptions): string {
         </span>
       </div>
       <div class="grid-head-right">
-        <button id="panel-power-tr" type="button" class="panel-power-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine sequencer audio ON or OFF"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-tr-label">ON AIR</span></button>
+        <button id="panel-power-tr" type="button" class="panel-power-btn mach-tr" aria-pressed="true" title="Toggle TR Drum Machine ACTIVE / PASSIVE (&#92; or ⌥⇧1)"><i class="mach-led" aria-hidden="true"></i><span id="panel-power-tr-label">ACTIVE [&#92;]</span></button>
         <button id="booth-swap-trk" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Traktor-style Pattern Player">Pattern Player ⇄</button>
         <button id="booth-swap-djs" type="button" class="small booth-only-btn" title="Switch Booth Split left deck to Pioneer DJS-1000 Sampler/Sequencer">DJS-1000 ⇄</button>
         <span class="hint" id="grid-hint"></span>

@@ -541,13 +541,15 @@ const MACBOOK_ROWS: readonly (readonly KeyCap[])[] = [
     kcap("Digit8", "8", "CH Hat", C_BLUE, "Mode: Roll", C_TEAL, "Roll 1/8", C_YELLOW, "Voice 8", C_MUTED),
     kcap("Digit9", "9", "OH Hat", C_BLUE, "Scene −", C_PURPLE, "Roll 1/16", C_YELLOW, "Voice 9", C_MUTED),
     kcap("Digit0", "0", "CB Bell", C_BLUE, "Scene +", C_PURPLE, "Roll 1/32", C_YELLOW, "Voice 10", C_MUTED),
+    kcap("Minus", "−", "BPM −1", C_YELLOW, "BPM −1", C_YELLOW, "BPM −1", C_YELLOW, "BPM −1", C_YELLOW),
+    kcap("Equal", "=", "BPM +1", C_YELLOW, "BPM +1", C_YELLOW, "BPM +1", C_YELLOW, "BPM +1", C_YELLOW),
     kcap("Backspace", "⌫", "Clear Row", C_RED, "Clear Trk", C_RED, "Erase Pad", C_RED, "Clear", C_RED),
   ],
   [
-    kcap("KeyQ", "Q", "Prev Pat", C_PURPLE, "Pad 5 HT", C_BLUE, "KILL LOW", C_RED, "Ctrl:KillLo", C_RED),
-    kcap("KeyW", "W", "Next Pat", C_PURPLE, "Pad 6 RS", C_BLUE, "KILL MID", C_RED, "Ctrl:KillMd", C_RED),
-    kcap("KeyE", "E", "Flam Edit", C_PURPLE, "Pad 7 CP", C_BLUE, "KILL HIGH", C_RED, "Ctrl:KillHi", C_RED),
-    kcap("KeyR", "R", "Hold Drop", C_RED, "Pad 8 CH", C_BLUE, "HOLD LEVER", C_RED, "Hold Drop", C_RED),
+    kcap("KeyQ", "Q", "Prev Pat", C_PURPLE, "Pad 5 HT", C_BLUE, "KILL LOW", C_RED, "⌥1–5 View", C_PURPLE),
+    kcap("KeyW", "W", "Next Pat", C_PURPLE, "Pad 6 RS", C_BLUE, "KILL MID", C_RED, "⌥⇧1–4 Actv", C_GREEN),
+    kcap("KeyE", "E", "Flam Edit", C_PURPLE, "Pad 7 CP", C_BLUE, "KILL HIGH", C_RED, "⌥~ Focus", C_TEAL),
+    kcap("KeyR", "R", "Hold Fill", C_RED, "Pad 8 CH", C_BLUE, "HOLD LEVER", C_RED, "Device R", C_RED),
     kcap("KeyT", "T", "Tap BPM", C_YELLOW, "Strip Mode", C_YELLOW, "Rel Mode", C_YELLOW, "Tap Beat", C_YELLOW),
     kcap("KeyY", "Y", "TR-8O8", C_TEAL, "Quantize", C_TEAL, "BPF Echo", C_BLUE, "Kit 8O8", C_MUTED),
     kcap("KeyU", "U", "TR-9O9", C_TEAL, "Live Rec", C_RED, "Echo FX", C_BLUE, "Kit 9O9", C_MUTED),
@@ -556,6 +558,7 @@ const MACBOOK_ROWS: readonly (readonly KeyCap[])[] = [
     kcap("KeyP", "P", "9O9 Drive", C_TEAL, "Capture", C_YELLOW, "Reverb Up", C_BLUE, "9O9 Drive", C_MUTED),
     kcap("BracketLeft", "[", "BPM −1", C_YELLOW, "BPM −1", C_YELLOW, "BPM −1", C_YELLOW, "BPM −1", C_YELLOW),
     kcap("BracketRight", "]", "BPM +1", C_YELLOW, "BPM +1", C_YELLOW, "BPM +1", C_YELLOW, "BPM +1", C_YELLOW),
+    kcap("Backslash", "\\", "Actv/Pass", C_GREEN, "Actv/Pass", C_GREEN, "Actv/Pass", C_GREEN, "Actv/Pass", C_GREEN),
   ],
   [
     kcap("KeyA", "A", "Step 1", C_GREEN, "Pad 9 OH", C_BLUE, "HPF Echo", C_PURPLE, "Step 1", C_MUTED),
@@ -820,6 +823,8 @@ export class HowToExplainer {
       Digit8: ["Pat 8 Top", C_TEAL],
       Digit9: ["Pat 9 Brk1", C_PURPLE],
       Digit0: ["Pat 10 Brk2", C_PURPLE],
+      Minus: ["Pat 11 Brk3", C_PURPLE],
+      Equal: ["Pat 12 Brk4", C_PURPLE],
       KeyQ: ["Echo+HPF↑", C_YELLOW],
       KeyW: ["Noise+Swp↑", C_YELLOW],
       KeyE: ["Spiral+Rl↑", C_YELLOW],
@@ -831,6 +836,7 @@ export class HowToExplainer {
       KeyO: ["Stem Cycle", C_PURPLE],
       KeyP: ["Reset Pat", C_RED],
       Period: ["KICK CUT", C_RED],
+      Backslash: ["Actv/Pass", C_GREEN],
     };
 
     for (const cap of this.modal.querySelectorAll<HTMLElement>("[data-key-code]")) {
@@ -3035,35 +3041,35 @@ export function howToModalMarkup(): string {
 
         <ol class="howto-steps" id="howto-qs-seq">
           <li>
-            <strong>1. Start playback and select a drum kit:</strong>
-            Press <kbd>Space</kbd> to start or stop transport. Select a pattern from <strong>Presets</strong> (<kbd>Q</kbd> / <kbd>W</kbd>), and press <kbd>Y</kbd> <kbd>U</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> (or open <strong>Drum kit</strong>) to load <strong>TR-8O8</strong>, <strong>TR-9O9</strong>, <strong>TR-7O7</strong>, <strong>TR-6O6</strong>, <strong>TR-72x</strong>, or <strong>CR-78</strong> circuits.
+            <strong>1. Switch machines (<kbd>⌥1</kbd>–<kbd>⌥5</kbd>) and toggle Active / Passive (<kbd>&#92;</kbd> or <kbd>⌥⇧1</kbd>–<kbd>⌥⇧4</kbd>):</strong>
+            Press <kbd>Space</kbd> to start transport. Press <kbd>⌥1</kbd>–<kbd>⌥5</kbd> (or <kbd>&#96;</kbd>) to switch views, and press <kbd>&#92;</kbd> to toggle the viewed machine <strong>ACTIVE</strong> or <strong>PASSIVE</strong> (<kbd>⇧&#92;</kbd> solos it). Device hotkeys control <strong>only</strong> the focused ACTIVE machine.
           </li>
           <li>
-            <strong>2. Select, audition, or mute the 10 drum voices (<kbd>1</kbd>–<kbd>0</kbd>):</strong>
-            Press <kbd>1</kbd>–<kbd>0</kbd> to select a drum row. Hold <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>0</kbd> to trigger that drum live, or press <kbd>⌥</kbd> + <kbd>1</kbd>–<kbd>0</kbd> (or <kbd>.</kbd>) to mute it. Use <strong>ON AIR</strong> to solo <strong>TR Drums</strong> or layer it with <strong>DJS-1000</strong>.
+            <strong>2. Select or audition the 10 drum voices (<kbd>1</kbd>–<kbd>0</kbd>) &amp; swap kits (<kbd>Y</kbd>–<kbd>P</kbd>):</strong>
+            Press <kbd>1</kbd>–<kbd>0</kbd> to select a drum row, hold <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>0</kbd> to trigger it live, or press <kbd>.</kbd> to mute it. Press <kbd>Y</kbd> <kbd>U</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> to load <strong>TR-8O8</strong>, <strong>TR-9O9</strong>, <strong>TR-7O7</strong>, <strong>TR-6O6</strong>, or <strong>9O9 Drive</strong> kits.
           </li>
           <li>
             <strong>3. Edit 16 steps and 64-step bar chains (<kbd>A</kbd>–<kbd>K</kbd> &amp; <kbd>Z</kbd>–<kbd>,</kbd>):</strong>
             Press Home Row <kbd>A</kbd>–<kbd>K</kbd> for <strong>Steps 1–8</strong> and Bottom Row <kbd>Z</kbd>–<kbd>,</kbd> for <strong>Steps 9–16</strong> (Off → Hit → Accent; hold <kbd>Shift</kbd> or press <kbd>E</kbd> for Flam). Click <strong>Copy→</strong> and <strong>A–D</strong> to chain 4 bars (64 steps).
           </li>
           <li>
-            <strong>4. Apply Groove, Voice FX, Save, and Reset:</strong>
-            Press <kbd>⌥+G</kbd> to humanize, <kbd>⌥+V</kbd> for variation, and <kbd>⌥+F</kbd> for a 1-bar fill. Press <kbd>Ctrl</kbd>+<kbd>1</kbd>–<kbd>0</kbd> for voice Dub Echo or <kbd>⇧+Q/W/E</kbd> for group echo. Click <strong>Save</strong> to store your startup session, or click <strong>Reset</strong> for factory defaults.
+            <strong>4. Apply Groove, Momentary Fill (<kbd>Hold R</kbd>), Voice FX, Save &amp; Reset:</strong>
+            Hold <kbd>R</kbd> for a live fill, or press <kbd>⌥+G</kbd> (Humanize), <kbd>⌥+V</kbd> (Variation), and <kbd>⌥+F</kbd> (1-Bar Fill). Press <kbd>Ctrl</kbd>+<kbd>1</kbd>–<kbd>0</kbd> for voice Dub Echo. Click <strong>Save</strong> to store your startup rig, or click <strong>Reset</strong> for factory defaults.
           </li>
         </ol>
 
         <ol class="howto-steps" id="howto-qs-traktor" hidden>
           <li>
             <strong>1. Launch pre-built Heavy Sub, House, or Breakbeat patterns (<kbd>1</kbd>–<kbd>0</kbd>, <kbd>−</kbd>, <kbd>=</kbd>):</strong>
-            Click any of the 12 pattern pads (or press <kbd>1</kbd>–<kbd>0</kbd>, <kbd>−</kbd>, <kbd>=</kbd>) to load Techno Sub Rumbles, House Top Loops, or Breakbeats synced to your master clock. Press <kbd>K</kbd> (<strong>KICK CUT</strong>) to mute the 4/4 kick when layering over a playing CDJ track.
+            Ensure Pattern Player is <strong>ACTIVE</strong> (<kbd>&#92;</kbd> toggles Active/Passive; <kbd>⌥1</kbd>–<kbd>⌥5</kbd> switches machines). Press <kbd>1</kbd>–<kbd>0</kbd>, <kbd>−</kbd>, <kbd>=</kbd> to launch 12 Techno Sub, House, and Breakbeat loops. Press <kbd>.</kbd> (<strong>KICK CUT</strong>) to mute the 4/4 kick over a DJ track.
           </li>
           <li>
             <strong>2. Shape heavy bass weight, pitch, decay, and sidechain ducking:</strong>
-            Press <kbd>Y</kbd> / <kbd>I</kbd> (or open <strong>Kit</strong>) to choose a heavy sub kit. Adjust <strong>VOLUME</strong>, <strong>BASS WEIGHT</strong>, and <strong>DECAY</strong>, press <kbd>B</kbd> / <kbd>N</kbd> to shift <strong>PITCH</strong> (−12 to +12 st), and press <kbd>U</kbd> to enable <strong>DUCKING</strong>.
+            Press <kbd>Y</kbd> / <kbd>I</kbd> (or open <strong>Kit</strong>) to choose a heavy sub kit. Adjust <strong>VOLUME</strong>, <strong>BASS WEIGHT</strong>, and <strong>DECAY</strong>, press <kbd>⌥+B</kbd> / <kbd>⌥+N</kbd> to shift <strong>PITCH</strong> (−12 to +12 st), and press <kbd>U</kbd> to enable <strong>DUCKING</strong>.
           </li>
           <li>
             <strong>3. Perform one-button Buildup FX and Release Into Drop (<kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> → <kbd>R</kbd>):</strong>
-            Tap once to latch (or hold) <kbd>Q</kbd> (<strong>ECHO + HPF FILTER</strong>), <kbd>W</kbd> (<strong>NOISE + FILTER SWEEP</strong>), <kbd>E</kbd> (<strong>SPIRAL + SNARE ROLL</strong>), or <kbd>T</kbd> (<strong>SUB KILL + REVERB</strong>). Press <kbd>R</kbd> (or click <strong>RELEASE INTO DROP!</strong>) on Beat 1 to open the filter and slam full sub-bass back onto the active pattern.
+            Tap once to latch (or hold) <kbd>Q</kbd> (<strong>ECHO + HPF FILTER</strong>), <kbd>W</kbd> (<strong>NOISE + FILTER SWEEP</strong>), <kbd>E</kbd> (<strong>SPIRAL + SNARE ROLL</strong>), or <kbd>T</kbd> (<strong>SUB KILL + REVERB</strong>). Press <kbd>R</kbd> (<strong>RELEASE INTO DROP!</strong>) on Beat 1 to open the filter and slam full sub-bass back onto the active pattern.
           </li>
           <li>
             <strong>4. Edit the 2×8 Step Strip or load local WAV samples (<kbd>A</kbd>–<kbd>K</kbd>, <kbd>Z</kbd>–<kbd>,</kbd>, <kbd>O</kbd>, <kbd>P</kbd>):</strong>

@@ -4008,19 +4008,23 @@ input[type="range"] {
     font-size: 9.5px;
   }
   #app[data-surface="booth"] .trk-seq-footer {
-    padding: 5px 8px;
-    gap: 4px;
+    padding: 4px 8px;
+    gap: 3px;
+  }
+  #app[data-surface="booth"] .trk-stem-label {
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
   }
   #app[data-surface="booth"] .trk-stem-tabs button {
-    min-height: 20px;
-    padding: 1px 6px;
-    font-size: 9.5px;
+    min-height: 19px;
+    padding: 1px 5px;
+    font-size: 9px;
   }
   #app[data-surface="booth"] .trk-step-grid {
-    gap: 4px;
+    gap: 3px;
   }
   #app[data-surface="booth"] .trk-step {
-    min-height: 27px;
+    min-height: 24px;
     padding: 2px 4px;
   }
   #app[data-surface="booth"] #clock .clock-help-btn {
@@ -4068,6 +4072,130 @@ input[type="range"] {
 :root[data-theme="tr-silver"] .trk-drop-btn[data-armed="true"] {
   color: #ffffff;
   background-color: #dc2626;
+}
+
+/* ---- Active / Passive Machine Badges, Keyboard Target Pill & Pattern Player Key Legend ---- */
+
+.mach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mach-state {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+}
+.mach-btn[aria-pressed="true"] .mach-state {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: currentColor;
+}
+
+.kb-target-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background-color: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  white-space: nowrap;
+}
+.kb-target-pill[data-passive="true"] {
+  border-color: rgba(245, 158, 11, 0.65);
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.kb-focus-btn[aria-pressed="true"] {
+  border-color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+#app[data-surface="booth"] .panel[data-kb-focused="true"] {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.48);
+}
+
+.trk-hotkey-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background-color: rgba(15, 23, 42, 0.65);
+  border: 1px dashed var(--line-2);
+  font-size: 11px;
+  color: var(--muted);
+}
+:root[data-theme="tr-silver"] .trk-hotkey-strip {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+.trk-hk-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #a3e635;
+}
+:root[data-theme="tr-silver"] .trk-hk-title {
+  color: #166534;
+}
+.trk-hotkey-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.trk-hotkey-strip kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+@media (min-width: 1180px) {
+  #app[data-surface="booth"] .trk-hotkey-strip {
+    display: none;
+  }
+  #app[data-surface="booth"] .mach-state {
+    display: none;
+  }
+  #app[data-surface="booth"] .kb-target-pill {
+    min-height: 20px;
+    padding: 1px 6px;
+    font-size: 9px;
+  }
+  #app[data-surface="booth"] .rmx-head-actions button,
+  #app[data-surface="booth"] .panel-power-btn {
+    min-height: 20px;
+    padding: 1px 6px;
+    font-size: 9.5px;
+  }
+  #app[data-surface="booth"] .rmx-panel {
+    gap: 5px;
+  }
+}
+@media (min-width: 1180px) and (max-width: 1380px) {
+  #app[data-surface="booth"] .kb-target-pill {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

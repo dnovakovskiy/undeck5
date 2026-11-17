@@ -550,6 +550,15 @@ export class TraktorPanel {
     }
   }
 
+  private flashEl(selector: string): void {
+    const el = this.root.querySelector<HTMLElement>(selector);
+    if (!el) return;
+    el.classList.remove("kb-flash");
+    void el.offsetWidth;
+    el.classList.add("kb-flash");
+    setTimeout(() => el.classList.remove("kb-flash"), 170);
+  }
+
   selectPattern(idx: number): string {
     const wrapped = ((idx % TRAKTOR_PATTERNS.length) + TRAKTOR_PATTERNS.length) % TRAKTOR_PATTERNS.length;
     const pat = TRAKTOR_PATTERNS[wrapped]!;
@@ -566,6 +575,7 @@ export class TraktorPanel {
       this.fireCustomSample(0.9);
     }
     this.render();
+    this.flashEl(`[data-trk-pattern="${wrapped}"]`);
     return `${pat.name} (${pat.genre})`;
   }
 
@@ -592,6 +602,7 @@ export class TraktorPanel {
   selectStem(stem: TraktorStemId): void {
     this.activeStem = stem;
     this.render();
+    this.flashEl(`[data-trk-stem="${stem}"]`);
   }
 
   toggleStep(stepIdx: number, accentOnly = false): void {
@@ -602,6 +613,7 @@ export class TraktorPanel {
     this.applyShapingToSpec(next);
     this.cb.onCommitSpec(next, "trk-step");
     this.render();
+    this.flashEl(`[data-trk-step="${stepIdx + 1}"]`);
   }
 
   toggleKickCut(): boolean {
@@ -610,6 +622,7 @@ export class TraktorPanel {
     this.applyShapingToSpec(next);
     this.cb.onCommitSpec(next, "trk-kick-cut");
     this.render();
+    this.flashEl("#trk-kick-cut");
     return this.kickCut;
   }
 
@@ -619,6 +632,7 @@ export class TraktorPanel {
     this.applyShapingToSpec(next);
     this.cb.onCommitSpec(next, "trk-ducking");
     this.render();
+    this.flashEl("#trk-ducking");
     return this.ducking;
   }
 
@@ -681,12 +695,15 @@ export class TraktorPanel {
     this.cb.audio.setRmxState(cleanRmx);
 
     // Fire punchy downbeat Sub Kick + Crash/Open-Hat impact onto the playing pattern!
-    if (this.powered && wasBuilding) {
-      void this.cb.audio.triggerVoice("kick", 1.0).catch(() => {});
-      void this.cb.audio.triggerVoice("open_hat", 0.92).catch(() => {});
-      if (this.customSampleBuffer) this.fireCustomSample(1.0);
-      this.dropFlashUntil = performance.now() + 900;
-      this.cb.onSay("DROP! Filter wide open and full sub-bass restored onto active pattern.");
+    if (this.powered) {
+      if (wasBuilding) {
+        void this.cb.audio.triggerVoice("kick", 1.0).catch(() => {});
+        void this.cb.audio.triggerVoice("open_hat", 0.92).catch(() => {});
+        if (this.customSampleBuffer) this.fireCustomSample(1.0);
+        this.dropFlashUntil = performance.now() + 900;
+        this.cb.onSay("DROP! Filter wide open and full sub-bass restored onto active pattern.");
+      }
+      this.flashEl("#trk-drop-btn");
     }
     this.render();
   }
@@ -924,7 +941,7 @@ export class TraktorPanel {
     const kit = this.currentKit();
 
     $("trk-readout").textContent = !this.powered
-      ? "PLAYER OFF"
+      ? "PASSIVE · PRESS \\ TO ACTIVATE"
       : this.activeBuildup
         ? `BUILDING · ${BUILDUP_LABELS[this.activeBuildup]}`
         : `${kit.name.toUpperCase()} · ${pat.name.toUpperCase()}${this.kickCut ? " · KICK CUT" : ""}`;
@@ -969,7 +986,7 @@ export class TraktorPanel {
     }
 
     const voice = STEM_PRIMARY_VOICE[this.activeStem];
-    $("trk-stem-label").textContent = `${STEM_LABELS[this.activeStem]} · 16 STEPS`;
+    $("trk-stem-label").textContent = `${STEM_LABELS[this.activeStem]} · 16 STEPS [O = NEXT STEM]`;
     const stepsStr = normalizeSteps(spec.voices[voice].steps);
 
     this.stepButtons.forEach((btn, i) => {

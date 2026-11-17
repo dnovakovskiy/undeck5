@@ -1092,3 +1092,49 @@ test("Traktor Pro 4+ Pattern Player: heavy sub kits, Breakbeat patterns, Buildup
   }
   expect(errors).toEqual([]);
 });
+
+test("Active/Passive machine toggles, hotkey machine switching, and zero cross-machine bleed", async ({ page }) => {
+  const errors = guard(page);
+  await page.setViewportSize({ width: 1440, height: 820 });
+  await page.goto("/");
+
+  // 1. Hotkey switch to Pattern Player (Alt+Digit2) -> Pattern Player is ACTIVE & owns hotkeys
+  await page.keyboard.press("Alt+Digit2");
+  await expect(app(page)).toHaveAttribute("data-surface", "traktor");
+  await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#kb-target-pill")).toHaveAttribute("data-target", "traktor");
+  await expect(page.locator(".trk-hotkey-strip")).toBeVisible();
+
+  // Zero bleed check: pressing KeyR or Control+Digit2 on Pattern Player never touches RMX lever or TR Drums FX
+  await page.keyboard.down("KeyR");
+  await expect(page.locator("#rmx-release-lever")).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.up("KeyR");
+  await page.keyboard.press("Control+Digit2");
+  await expect(page.locator("#vfx-readout")).toContainText("DRY");
+
+  // 2. Toggle Pattern Player PASSIVE via Backslash (\) -> hotkeys ignore passive machine instead of waking it
+  await page.keyboard.press("Backslash");
+  await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#kb-target-pill")).toHaveAttribute("data-passive", "true");
+  await page.keyboard.press("Digit0"); // Would select UK Sub Break if active
+  await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator('[data-trk-pattern="9"]')).toHaveAttribute("aria-pressed", "false");
+
+  // Re-activate via Backslash (\) -> Digit0 now selects UK Sub Break cleanly
+  await page.keyboard.press("Backslash");
+  await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Digit0");
+  await expect(page.locator('[data-trk-pattern="9"]')).toHaveAttribute("aria-pressed", "true");
+
+  // 3. Toggle individual machines via Alt+Shift+1..4 & switch Booth Split focus via Alt+Backquote
+  await page.keyboard.press("Alt+Shift+Digit1"); // Activate TR Drums alongside Pattern Player
+  await expect(page.locator("#power-tr")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Alt+Digit5"); // Switch to Booth Split
+  await expect(app(page)).toHaveAttribute("data-surface", "booth");
+  await page.keyboard.press("Alt+Backquote"); // Swap Booth focus to RMX-1000
+  await expect(page.locator("#kb-target-pill")).toHaveAttribute("data-target", "rmx");
+  await page.keyboard.press("KeyQ"); // Toggles RMX Kill Low ONLY
+  await expect(page.locator("#rmx-kill-low")).toHaveAttribute("aria-pressed", "true");
+
+  expect(errors).toEqual([]);
+});
