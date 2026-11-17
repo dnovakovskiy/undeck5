@@ -72,6 +72,10 @@ Press **`?`** (or click **`How to · ?`** / **`Sync Guide · ?`**) anytime for *
 
 ## 🛠️ How to Install & Start (Local Prototype)
 
+### Option 0: Zero-Build Offline File (Fastest)
+
+Download **`player5-offline.html`** from the [**`v0.1.0` Release**](https://github.com/dnovakovskiy/player5/releases/tag/v0.1.0) and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
+
 ### Option A: Copy-Paste Prompt for Your AI Coding Agent
 
 Using **Antigravity**, **Claude Code**, **Cursor**, or **Codex**? Paste this prompt:
@@ -80,18 +84,19 @@ Using **Antigravity**, **Claude Code**, **Cursor**, or **Codex**? Paste this pro
 Clone https://github.com/dnovakovskiy/player5.git (if not already cloned), check that Rust (with wasm32-unknown-unknown) and Node.js 20+ are installed, build the WebAssembly DSP core with ./scripts/build-wasm.sh, install web dependencies in apps/web, start the local dev server, and give me the localhost URL to open in Chrome.
 ```
 
-### Option B: 3 Terminal Commands ("Just Let Me Jam")
+### Option B: Run Locally from Source (Mac / Linux)
 
-**Prerequisites:** [Node.js 20+](https://nodejs.org/) and [Rust (`rustup`)](https://rustup.rs/) (`rustup target add wasm32-unknown-unknown`).
+**Prerequisites:** [Node.js 20+](https://nodejs.org/) and [Rust (`rustup`)](https://rustup.rs/).
 
 ```sh
 git clone https://github.com/dnovakovskiy/player5.git
 cd player5
+rustup target add wasm32-unknown-unknown
 ./scripts/build-wasm.sh
 cd apps/web && npm install && npm run dev
 ```
 
-Open **`http://localhost:5173`**, hit **`Space`**, and play! *(Or run `npm run build:single` inside `apps/web` to pack everything into one offline file at `apps/web/dist-single/player5.html`.)*
+Open **`http://localhost:5173`**, hit **`Space`**, and start annoying your B2B friends. *(Or run `npm run build:single` inside `apps/web` to pack everything into one offline file at `apps/web/dist-single/player5.html`.)*
 
 ---
 
@@ -99,8 +104,8 @@ Open **`http://localhost:5173`**, hit **`Space`**, and play! *(Or run `npm run b
 
 | Booth Setup | What You Need | Exact Setup Steps |
 | :--- | :--- | :--- |
-| **Pioneer CDJ-2000NXS2 / CDJ-3000 + DJM** *(Pro DJ Link)* | USB-C → Ethernet into the booth LAN switch | Run `cargo run --release -p player5-bridge -- --source prolink --web apps/web/dist` (use `--source opus` for **AlphaTheta Opus Quad**), open **`http://localhost:17505`**, select **`Bridge`** in **CLOCK**, click **`Connect`**, and set **Follow** to **`Tempo master`**. |
-| **Traktor Pro 4, Serato, Rekordbox, DJay, or Ableton Live** *(Ableton Link)* | Same Wi-Fi / LAN | Enable **Link** in your DJ app, run `cargo run --release -p player5-bridge -- --web apps/web/dist`, select **`Ableton Link`** in **CLOCK**, and click **`Join Link`**. |
+| **Pioneer CDJ-2000NXS2 / CDJ-3000 + DJM** *(Pro DJ Link)* | USB-C → Ethernet into the booth LAN switch | Build web (`cd apps/web && npm run build`), then from repo root run `cargo run --release -p player5-bridge -- --source prolink --web apps/web/dist` (use `--source opus` for **AlphaTheta Opus Quad**). Open **`http://localhost:17505`**, select **`Bridge`** in **CLOCK**, click **`Connect`**, and set **Follow** to **`Tempo master`**. |
+| **Ableton Live, Traktor Pro 4, Serato, Rekordbox, DJay** *(Ableton Link)* | Same Wi-Fi / LAN | Enable **Link** in your DJ app/DAW, build web (`cd apps/web && npm run build`), then run `cargo run --release -p player5-bridge --features ableton-link -- --source link --web apps/web/dist`. Open **`http://localhost:17505`**, select **`Ableton Link`** in **CLOCK**, and click **`Join Link`**. |
 | **Hardware Mixer / Synth MIDI Out** *(24 PPQN)* | USB-MIDI cable + Chrome/Edge | Select **`MIDI`** in **CLOCK** and pick your MIDI input port. |
 | **Vinyl / Turntables / Zero Cables** *(Tap + Nudge)* | Just your ears | Select **`Tap`** in **CLOCK**, tap **`T`** 4× on the kick, and nudge phase `±1 ms` with **`;` / `'`** + calibrate speaker delay with **`Sync Click`**. |
 
