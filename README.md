@@ -4,11 +4,11 @@
   <img src="docs/assets/hero-retrowave-b2b.jpg" alt="View from behind the booth in a Berlin underground warehouse techno club: two DJs mixing B2B across 4 decks while the 3rd friend stands beside them on stage playing a wired laptop drum machine in front of a locked-in crowd" width="100%" />
 
   <h3>
-    Berlin booth. Two friends mixing B2B on 4 decks.<br />
-    <em>What does Friend #3 do besides stand on stage waiting 20 minutes for a turn?</em>
+    Berlin booth. Four CDJs. Two friends intensely pretending to tweak the EQs B2B.<br />
+    <em>What is Friend #3 supposed to do — nod politely with an unlit cigarette waiting 40 minutes for a turn?</em>
   </h3>
   <p>
-    Hook up your laptop straight into the rig, lock to the master clock, and become <strong>Player #5</strong> — layering heavy techno sub-bass, breakbeats, live pad rolls, and post-filter buildup drops right into the club sound system.
+    Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Player #5</strong> — casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
   </p>
   <p>
     🎬 <a href="docs/assets/player5-overview.mp4"><strong>Watch the 18-Second Live Audio + Video Overview (<code>docs/assets/player5-overview.mp4</code>)</strong></a>
@@ -16,8 +16,8 @@
 </div>
 
 > [!IMPORTANT]
-> **Status: Local Prototype (Runs on Your Laptop Today — Native App Later)**
-> `player5` is currently an **early local prototype** meant for bedroom jams, house parties, and booth tests on your own machine (in a browser tab, as a single offline `.html` file, or paired with its local Rust sync bridge). Everything runs on one deterministic **Rust DSP + Sequencer core** (`core/`), so once the live workflow is dialed in it **may become a standalone native macOS / iPadOS app** later.
+> **Status: Shameless Local Prototype (Runs on Your Laptop Today — Native App Maybe Later)**
+> Nobody asked for a Rust drum machine pretending to be a fifth CDJ, yet here we are. `player5` is currently an **early local prototype** meant for living-room afterhours, questionable studio experiments, and crashing your friends' B2B set from a browser tab (or one offline `.html` file + a tiny Rust sync bridge). Because the whole synth and sequencer core (`core/`) is already deterministic Rust, it **may grow up into a native macOS / iPadOS booth app** later.
 
 ---
 
