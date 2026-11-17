@@ -33,6 +33,10 @@
 
 ## 🎛️ What It Looks Like in Action
 
+<div align="center">
+  <img src="docs/assets/devices-overview.svg" alt="Overview of the 4 emulated club devices in player5: Step Sequencer, Pattern Player, DJS-1000 Deck, and RMX-1000 Station sharing one Rust/Wasm engine" width="100%" />
+</div>
+
 Every surface shares **one sample-accurate clock and Rust/Wasm audio engine**, so switching views or color themes never hiccups. Fresh builds always open clean — click **`Save`** to store your startup rig, or **`Reset`** anytime to wipe back to factory defaults.
 
 ### 1. Pattern Player *(Traktor Pro 4+ Style Heavy-Bass Layer Deck)*

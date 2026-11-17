@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-label="player5 4 emulated club devices on one shared Rust and WebAssembly clock">
+  <defs>
+    <linearGradient id="ovBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0e17" />
+      <stop offset="100%" stop-color="#151927" />
+    </linearGradient>
+    <linearGradient id="cardDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#141a28" />
+      <stop offset="100%" stop-color="#0e131e" />
+    </linearGradient>
+  </defs>
+
+  <rect x="2" y="2" width="956" height="356" rx="16" fill="url(#ovBg)" stroke="#263042" stroke-width="2" />
+
+  <!-- Header -->
+  <text x="26" y="32" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="800" letter-spacing="1.4" fill="#f8fafc">4 EMULATED CLUB MACHINES · 1 SHARED CLOCK &amp; AUDIO ENGINE</text>
+  <text x="934" y="32" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#38bdf8">SOLO WITH ⌥1–⌥4 · LAYER WITH ACTIVE [\]</text>
+  <line x1="26" y1="45" x2="934" y2="45" stroke="#243044" stroke-width="1" />
+
+  <!-- Card 1: TR Step Sequencer -->
+  <g transform="translate(26, 62)">
+    <rect x="0" y="0" width="214" height="202" rx="11" fill="url(#cardDark)" stroke="#ff6a2b" stroke-width="1.6" />
+    <text x="14" y="24" font-family="ui-monospace, Menlo, monospace" font-size="10.5" font-weight="800" fill="#ff6a2b">1 · STEP SEQUENCER [⌥1]</text>
+    <!-- Mini 4x4 step icon -->
+    <rect x="14" y="36" width="28" height="10" rx="2" fill="#ff5232" />
+    <rect x="46" y="36" width="28" height="10" rx="2" fill="#1e293b" />
+    <rect x="78" y="36" width="28" height="10" rx="2" fill="#ff9626" />
+    <rect x="110" y="36" width="28" height="10" rx="2" fill="#1e293b" />
+    <rect x="142" y="36" width="28" height="10" rx="2" fill="#ffd43b" />
+    <rect x="174" y="36" width="26" height="10" rx="2" fill="#f8fafc" />
+    <text x="14" y="68" font-family="system-ui, sans-serif" font-size="13" font-weight="800" fill="#f8fafc">TR-REC 64-Step Grid</text>
+    <text x="14" y="90" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 10×16 + A–D 4-bar chains</text>
+    <text x="14" y="109" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 7 circuits: 8O8 / 9O9 /</text>
+    <text x="14" y="125" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">  7O7 / 6O6 / 72x / CR-78</text>
+    <text x="14" y="144" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Shuffle, Flam &amp; Voice FX</text>
+    <text x="14" y="163" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Hold R Live Fill · ⌥F Fill</text>
+    <text x="14" y="186" font-family="ui-monospace, Menlo, monospace" font-size="10" font-weight="700" fill="#fbbf24">6 Hardware Color Themes</text>
+  </g>
+
+  <!-- Card 2: Pattern Player -->
+  <g transform="translate(256, 62)">
+    <rect x="0" y="0" width="214" height="202" rx="11" fill="url(#cardDark)" stroke="#a3e635" stroke-width="1.6" />
+    <text x="14" y="24" font-family="ui-monospace, Menlo, monospace" font-size="10.5" font-weight="800" fill="#a3e635">2 · PATTERN PLAYER [⌥2]</text>
+    <!-- Mini buildup bar -->
+    <rect x="14" y="36" width="126" height="10" rx="2" fill="#f59e0b" />
+    <rect x="144" y="36" width="56" height="10" rx="2" fill="#ef4444" />
+    <text x="14" y="68" font-family="system-ui, sans-serif" font-size="13" font-weight="800" fill="#f8fafc">Traktor Pro 4+ Deck</text>
+    <text x="14" y="90" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 7 Heavy Sub-Bass Kits</text>
+    <text x="14" y="109" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 12 Techno / House / Break</text>
+    <text x="14" y="128" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• KICK CUT [.] &amp; DUCK [U]</text>
+    <text x="14" y="147" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Q/W/E/T → R Drop Tail</text>
+    <text x="14" y="166" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• + Load WAV Local Samples</text>
+    <text x="14" y="186" font-family="ui-monospace, Menlo, monospace" font-size="10" font-weight="700" fill="#a3e635">Rolling Post-Filter Tail</text>
+  </g>
+
+  <!-- Card 3: DJS-1000 Deck -->
+  <g transform="translate(486, 62)">
+    <rect x="0" y="0" width="214" height="202" rx="11" fill="url(#cardDark)" stroke="#00e5ff" stroke-width="1.6" />
+    <text x="14" y="24" font-family="ui-monospace, Menlo, monospace" font-size="10.5" font-weight="800" fill="#00e5ff">3 · DJS-1000 DECK [⌥3]</text>
+    <!-- Mini 4x1 RGB pads -->
+    <rect x="14" y="36" width="42" height="10" rx="2" fill="#ef4444" />
+    <rect x="61" y="36" width="42" height="10" rx="2" fill="#f59e0b" />
+    <rect x="108" y="36" width="42" height="10" rx="2" fill="#3b82f6" />
+    <rect x="155" y="36" width="45" height="10" rx="2" fill="#a855f7" />
+    <text x="14" y="68" font-family="system-ui, sans-serif" font-size="13" font-weight="800" fill="#f8fafc">Pioneer CDJ Sampler</text>
+    <text x="14" y="90" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 8 Scenes (incl. Breaks)</text>
+    <text x="14" y="109" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 4×4 RGB Pads (Left Hand)</text>
+    <text x="14" y="128" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Play / Mute / Pitch / Roll</text>
+    <text x="14" y="147" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Touch Strip 1/32–1/4</text>
+    <text x="14" y="166" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Quantize &amp; Live Rec</text>
+    <text x="14" y="186" font-family="ui-monospace, Menlo, monospace" font-size="10" font-weight="700" fill="#38bdf8">CDJ Tempo ±6% + Nudge</text>
+  </g>
+
+  <!-- Card 4: RMX-1000 Station -->
+  <g transform="translate(716, 62)">
+    <rect x="0" y="0" width="218" height="202" rx="11" fill="url(#cardDark)" stroke="#c084fc" stroke-width="1.6" />
+    <text x="14" y="24" font-family="ui-monospace, Menlo, monospace" font-size="10.5" font-weight="800" fill="#c084fc">4 · RMX-1000 STATION [⌥4]</text>
+    <!-- Mini 3-band EQ bars -->
+    <rect x="14" y="36" width="58" height="10" rx="2" fill="#38bdf8" />
+    <rect x="78" y="36" width="58" height="10" rx="2" fill="#c084fc" />
+    <rect x="142" y="36" width="60" height="10" rx="2" fill="#ff2bd6" />
+    <text x="14" y="68" font-family="system-ui, sans-serif" font-size="13" font-weight="800" fill="#f8fafc">Pioneer Remix Effector</text>
+    <text x="14" y="90" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 3-Band Isolator (24dB)</text>
+    <text x="14" y="109" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• 10 Scene FX (Spiral/Noise)</text>
+    <text x="14" y="128" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• X-Pad Beat Roll (1/1–1/32)</text>
+    <text x="14" y="147" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Hold R Release FX Lever</text>
+    <text x="14" y="166" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">• Vinyl Brake / Back Spin</text>
+    <text x="14" y="186" font-family="ui-monospace, Menlo, monospace" font-size="10" font-weight="700" fill="#e879f9">Pairs Live in Booth Split [⌥5]</text>
+  </g>
+
+  <!-- Shared Engine Footer Bus -->
+  <rect x="26" y="280" width="908" height="62" rx="10" fill="#0f1522" stroke="#334155" stroke-width="1.5" />
+  <text x="44" y="304" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="800" fill="#fbbf24">SHARED DETERMINISTIC RUST / WEBASSEMBLY CORE + OMNI-SYNC ENGINE</text>
+  <text x="44" y="325" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#cbd5e1">Booth Split [⌥5]: Left Deck (TR / Pattern Player / DJS) + RMX-1000 Side-by-Side  ·  Pro DJ Link · Opus Quad · Ableton Link · MIDI · Tap</text>
+</svg>
