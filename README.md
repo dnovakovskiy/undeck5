@@ -72,6 +72,10 @@ Press **`?`** (or click **`How to · ?`** / **`Sync Guide · ?`**) anytime for *
 
 ## 🛠️ How to Install & Start (Local Prototype)
 
+<div align="center">
+  <img src="docs/assets/setup-diagram.svg" alt="player5 local installation and DJ booth hookup architecture diagram" width="100%" />
+</div>
+
 ### Option 0: Zero-Build Offline File (Fastest)
 
 Download **`player5-offline.html`** from the [**`v0.1.0` Release**](https://github.com/dnovakovskiy/player5/releases/tag/v0.1.0) and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
