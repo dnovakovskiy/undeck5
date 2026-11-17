@@ -235,6 +235,24 @@ export class EngineHost {
     this.syncClickAge = -1;
     this.syncClickPhase = 0;
 
+    // 10-Voice Custom WAV Sampler Layer (user-loaded local NI / WAV kits)
+    this.customSamples = new Array(10).fill(null);
+    this.sampleMeta = { variation: 0, lastStep: 16, accent: 0.6, flam: 0.4, voices: [] };
+    this.nextSampleAbsStep = -1;
+    this.samplePool = [];
+    for (let k = 0; k < 16; k++) {
+      this.samplePool.push({
+        active: false,
+        voiceIdx: 0,
+        pos: 0,
+        rate: 1,
+        vel: 0,
+        delayFrames: 0,
+        maxFrames: 0,
+        ageFrames: 0,
+      });
+    }
+
     // Post-RMX Stereo Safety Limiter (-0.3 dBFS ceiling)
     this.limGain = 1;
     this.limRel = Math.exp(-1 / (0.06 * sampleRate));
@@ -251,7 +269,130 @@ export class EngineHost {
     return (s >>> 0) / 2147483648 - 1;
   }
 
+  spawnSampleHit(voiceIdx, rate, vel, decay, delayFrames) {
+    const bank = this.customSamples[voiceIdx];
+    if (!bank || !bank.pcm || !bank.pcm.length || vel <= 0.001) return;
+    // Closed hat (7) chokes Open hat (8) cleanly, just like the analog circuit
+    if (voiceIdx === 7) {
+      for (let k = 0; k < this.samplePool.length; k++) {
+        const s = this.samplePool[k];
+        if (s.active && s.voiceIdx === 8) {
+          s.maxFrames = Math.min(s.maxFrames || s.ageFrames + 400, s.ageFrames + 260);
+        }
+      }
+    }
+    let pick = this.samplePool[0];
+    let oldest = -1;
+    for (let k = 0; k < this.samplePool.length; k++) {
+      const s = this.samplePool[k];
+      if (!s.active) {
+        pick = s;
+        break;
+      }
+      if (s.ageFrames > oldest) {
+        oldest = s.ageFrames;
+        pick = s;
+      }
+    }
+    pick.active = true;
+    pick.voiceIdx = voiceIdx;
+    pick.pos = 0;
+    pick.rate = clamp(rate, 0.25, 4.0);
+    pick.vel = clamp(vel, 0, 1.35);
+    pick.delayFrames = Math.max(0, delayFrames | 0);
+    pick.ageFrames = 0;
+    const len = bank.pcm.length;
+    pick.maxFrames = decay >= 0.95 ? len : Math.max(900, Math.round(len * (0.12 + decay * 0.92)));
+  }
+
+  sampleWavVoices() {
+    let sum = 0;
+    for (let k = 0; k < this.samplePool.length; k++) {
+      const s = this.samplePool[k];
+      if (!s.active) continue;
+      if (s.delayFrames > 0) {
+        s.delayFrames--;
+        continue;
+      }
+      const bank = this.customSamples[s.voiceIdx];
+      if (!bank || !bank.pcm) {
+        s.active = false;
+        continue;
+      }
+      const pcm = bank.pcm;
+      const idx = Math.floor(s.pos);
+      if (idx >= pcm.length - 1 || s.ageFrames >= s.maxFrames) {
+        s.active = false;
+        continue;
+      }
+      const frac = s.pos - idx;
+      const raw = pcm[idx] + (pcm[idx + 1] - pcm[idx]) * frac;
+      let env = 1;
+      const rem = s.maxFrames - s.ageFrames;
+      if (rem < 360) env = Math.max(0, rem / 360);
+      sum += raw * s.vel * env;
+      s.pos += s.rate;
+      s.ageFrames++;
+    }
+    return sum;
+  }
+
+  triggerSampleStep(absStep) {
+    const meta = this.sampleMeta;
+    const voices = meta.voices;
+    if (!voices || !voices.length) return;
+    const loopLen = Math.max(1, Math.min(16, meta.lastStep | 0 || 16));
+    const stepInBar = ((absStep % loopLen) + loopLen) % loopLen;
+    const barCycle = Math.floor(absStep / loopLen);
+    const variation = meta.variation | 0;
+    let barSlot = 0;
+    if (variation === 1) barSlot = 1;
+    else if (variation === 3) barSlot = 2;
+    else if (variation === 4) barSlot = 3;
+    else if (variation === 2) barSlot = barCycle % 2;
+    else if (variation === 5) barSlot = ((barCycle % 4) + 4) % 4;
+
+    const anySolo = voices.some((v) => v && v.solo);
+    const accentBoost = 1 + (+meta.accent || 0.6) * 0.35;
+    const flamDelayFrames = Math.round((0.012 + (+meta.flam || 0.4) * 0.022) * this.sampleRate);
+
+    for (let vIdx = 0; vIdx < 10; vIdx++) {
+      if (!this.customSamples[vIdx]) continue;
+      const v = voices[vIdx];
+      if (!v || v.mute || (anySolo && !v.solo)) continue;
+      const barStr =
+        barSlot === 1
+          ? v.steps_b || v.steps
+          : barSlot === 2
+            ? v.steps_c || v.steps
+            : barSlot === 3
+              ? v.steps_d || v.steps
+              : v.steps;
+      const ch = barStr && barStr[stepInBar] ? barStr[stepInBar] : "-";
+      if (ch === "-") continue;
+      const baseLvl = typeof v.level === "number" ? v.level : 0.85;
+      const tune = typeof v.tune === "number" ? v.tune : 0.5;
+      const decay = typeof v.decay === "number" ? v.decay : 0.85;
+      const rate = Math.pow(2, (tune - 0.5) * 2);
+      const isAcc = ch === "X" || ch === "F";
+      const isFlam = ch === "f" || ch === "F";
+      const vel = baseLvl * (isAcc ? accentBoost : 0.86);
+      this.spawnSampleHit(vIdx, rate, vel, decay, 0);
+      if (isFlam) {
+        this.spawnSampleHit(vIdx, rate, vel * 0.72, decay, flamDelayFrames);
+      }
+    }
+  }
+
   spawnXPadVoice(voiceIdx, pitch, velocity) {
+    if (voiceIdx >= 0 && voiceIdx < 10 && this.customSamples[voiceIdx]) {
+      const vm = this.sampleMeta.voices?.[voiceIdx];
+      const tune = vm && typeof vm.tune === "number" ? vm.tune : 0.5;
+      const decay = vm && typeof vm.decay === "number" ? vm.decay : 0.85;
+      const lvl = vm && typeof vm.level === "number" ? vm.level : 0.9;
+      this.spawnSampleHit(voiceIdx, Math.pow(2, (tune - 0.5) * 2 + pitch), velocity * lvl, decay, 0);
+      return;
+    }
     // Closed Hat (7) chokes ringing Open Hat (8) on X-Pad too
     if (voiceIdx === 7) {
       for (let i = 0; i < 8; i++) {
@@ -482,6 +623,7 @@ export class EngineHost {
         break;
       case "stop":
         api.p5_engine_stop(e);
+        this.nextSampleAbsStep = -1;
         break;
       case "clock-mode":
         api.p5_engine_set_clock_mode(e, msg.mode | 0);
@@ -504,13 +646,47 @@ export class EngineHost {
       case "latency":
         api.p5_engine_set_latency_ms(e, +msg.ms);
         break;
-      case "trigger-voice":
-        if (typeof api.p5_engine_trigger_voice === "function") {
-          api.p5_engine_trigger_voice(e, msg.voiceIdx | 0, +msg.velocity || 0.9);
-        } else {
-          this.spawnXPadVoice(msg.voiceIdx | 0, 0, +msg.velocity || 0.9);
+      case "set-voice-sample": {
+        const vIdx = msg.voiceIdx | 0;
+        if (vIdx >= 0 && vIdx < 10 && msg.pcm && msg.pcm.length > 0) {
+          this.customSamples[vIdx] = {
+            pcm: msg.pcm instanceof Float32Array ? msg.pcm : new Float32Array(msg.pcm),
+            name: typeof msg.name === "string" ? msg.name : "Sample",
+          };
         }
         break;
+      }
+      case "clear-voice-sample": {
+        const vIdx = msg.voiceIdx | 0;
+        if (vIdx >= 0 && vIdx < 10) {
+          this.customSamples[vIdx] = null;
+        }
+        break;
+      }
+      case "clear-all-samples":
+        this.customSamples.fill(null);
+        break;
+      case "sample-meta":
+        if (msg.meta && typeof msg.meta === "object") {
+          this.sampleMeta = msg.meta;
+        }
+        break;
+      case "trigger-voice": {
+        const vIdx = msg.voiceIdx | 0;
+        const vel = +msg.velocity || 0.9;
+        if (vIdx >= 0 && vIdx < 10 && this.customSamples[vIdx]) {
+          const vm = this.sampleMeta.voices?.[vIdx];
+          const tune = vm && typeof vm.tune === "number" ? vm.tune : 0.5;
+          const decay = vm && typeof vm.decay === "number" ? vm.decay : 0.85;
+          const lvl = vm && typeof vm.level === "number" ? vm.level : 0.9;
+          this.spawnSampleHit(vIdx, Math.pow(2, (tune - 0.5) * 2), vel * lvl, decay, 0);
+        } else if (typeof api.p5_engine_trigger_voice === "function") {
+          api.p5_engine_trigger_voice(e, vIdx, vel);
+        } else {
+          this.spawnXPadVoice(vIdx, 0, vel);
+        }
+        break;
+      }
       case "grid-meta":
         this.patternShuffle = clamp(+msg.shuffle || 0, 0, 1);
         this.patternLastStep = clamp(msg.lastStep | 0 || 16, 1, 16);
@@ -1023,9 +1199,29 @@ export class EngineHost {
         }
       }
 
-      // 3. Dry mix + X-Pad voices + Sync Click + External Input
+      // 2b. Sample-accurate trigger for any user-loaded WAV kit voices
+      if (step >= 0 && curBeat >= -0.05) {
+        if (this.nextSampleAbsStep < 0) {
+          this.nextSampleAbsStep = this.ceilStepAtBeat(curBeat);
+        } else if (curBeat < this.stepToBeat(this.nextSampleAbsStep) - 2.0) {
+          this.nextSampleAbsStep = this.ceilStepAtBeat(curBeat);
+        }
+        let guard = 0;
+        while (curBeat >= this.stepToBeat(this.nextSampleAbsStep) && guard++ < 4) {
+          this.triggerSampleStep(this.nextSampleAbsStep);
+          this.nextSampleAbsStep++;
+        }
+      }
+
+      // 3. Dry mix + X-Pad voices + Custom WAV Sample Pool + Sync Click + External Input
       let sigL = dry[i];
       let sigR = sigL;
+
+      const wavSample = this.sampleWavVoices();
+      if (wavSample !== 0) {
+        sigL += wavSample;
+        sigR += wavSample;
+      }
 
       const xpadSample = this.sampleXPadVoices();
       if (xpadSample !== 0) {

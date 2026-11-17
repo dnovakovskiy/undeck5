@@ -21,6 +21,7 @@ fn server(web: Option<std::path::PathBuf>) -> player5_bridge::Server {
         },
         allowed_origins: Vec::new(),
         verbose: false,
+        ..Config::default()
     })
     .unwrap()
 }
@@ -276,6 +277,7 @@ fn unavailable_source_still_serves_with_an_error_status() {
         options: SourceOptions::default(),
         allowed_origins: Vec::new(),
         verbose: false,
+        ..Config::default()
     })
     .unwrap();
     let mut c = Client::connect(srv.local_addr());
@@ -346,6 +348,7 @@ fn foreign_page_origins_are_refused() {
         options: SourceOptions::default(),
         allowed_origins: vec!["https://player5.example".into()],
         verbose: false,
+        ..Config::default()
     })
     .unwrap();
     let addr = srv.local_addr();
@@ -412,6 +415,7 @@ fn follows_pro_dj_link_beat_packets() {
         },
         allowed_origins: Vec::new(),
         verbose: false,
+        ..Config::default()
     })
     .unwrap();
     let mut c = Client::connect(srv.local_addr());

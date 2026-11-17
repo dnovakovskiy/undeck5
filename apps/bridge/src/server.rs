@@ -15,6 +15,7 @@ use sync::net::{FollowTarget, SourceCommand};
 
 use crate::clock::{self, BridgeClock};
 use crate::http;
+use crate::samples::SampleCatalog;
 use crate::sources::{self, SourceKind, SourceOptions};
 use crate::ws::{self, Assembler, Event};
 
@@ -46,6 +47,8 @@ pub struct Config {
     /// Extra page origins allowed to open the WebSocket
     /// (`--allow-origin`; `*` = any). See [`http::origin_allowed`].
     pub allowed_origins: Vec<String>,
+    /// Extra local sample directories (`--samples-dir`, repeatable).
+    pub samples_dirs: Vec<PathBuf>,
     /// Log every connection.
     pub verbose: bool,
 }
@@ -59,6 +62,7 @@ impl Default for Config {
             source: SourceKind::Prolink,
             options: SourceOptions::default(),
             allowed_origins: Vec::new(),
+            samples_dirs: Vec::new(),
             verbose: false,
         }
     }
@@ -193,13 +197,22 @@ pub fn start(config: Config) -> io::Result<Server> {
             .spawn(move || run_hub(&hub, &stop, source, &options, &cmd_rx, verbose))?
     };
 
+    let catalog = Arc::new(SampleCatalog::build(&config.samples_dirs));
+    if !catalog.libraries.is_empty() && config.verbose {
+        eprintln!(
+            "player5-bridge: serving {} local sample library(s) at /samples/index.json",
+            catalog.libraries.len()
+        );
+    }
+
     let accept_thread = {
         let hub = Arc::clone(&hub);
         let stop = Arc::clone(&stop);
         let config = config.clone();
+        let catalog = Arc::clone(&catalog);
         std::thread::Builder::new()
             .name("bridge-accept".into())
-            .spawn(move || accept_loop(&listener, &hub, &stop, &config))?
+            .spawn(move || accept_loop(&listener, &hub, &stop, &config, &catalog))?
     };
 
     Ok(Server {
@@ -378,7 +391,13 @@ impl Drop for Slot {
     }
 }
 
-fn accept_loop(listener: &TcpListener, hub: &Arc<Hub>, stop: &AtomicBool, config: &Config) {
+fn accept_loop(
+    listener: &TcpListener,
+    hub: &Arc<Hub>,
+    stop: &AtomicBool,
+    config: &Config,
+    catalog: &Arc<SampleCatalog>,
+) {
     let active = Arc::new(Mutex::new(Counts::default()));
     let stop_flag = Arc::new(AtomicBool::new(false));
     let origins: Arc<[String]> = config.allowed_origins.clone().into();
@@ -413,6 +432,7 @@ fn accept_loop(listener: &TcpListener, hub: &Arc<Hub>, stop: &AtomicBool, config
                 let verbose = config.verbose;
                 let stop_flag = Arc::clone(&stop_flag);
                 let origins = Arc::clone(&origins);
+                let catalog = Arc::clone(catalog);
                 let spawned = std::thread::Builder::new()
                     .name("bridge-conn".into())
                     .spawn(move || {
@@ -425,6 +445,7 @@ fn accept_loop(listener: &TcpListener, hub: &Arc<Hub>, stop: &AtomicBool, config
                             &hub,
                             web.as_deref(),
                             &origins,
+                            &catalog,
                             &stop_flag,
                             verbose,
                         );
@@ -447,11 +468,44 @@ fn accept_loop(listener: &TcpListener, hub: &Arc<Hub>, stop: &AtomicBool, config
     stop_flag.store(true, Ordering::Relaxed);
 }
 
+fn url_decode(s: &str) -> String {
+    let mut out = Vec::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            ) {
+                out.push(((h << 4) | l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(if bytes[i] == b'+' { b' ' } else { bytes[i] });
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn query_param(query: &str, key: &str) -> Option<String> {
+    for pair in query.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == key {
+                return Some(url_decode(v));
+            }
+        }
+    }
+    None
+}
+
 fn handle_connection(
     mut stream: TcpStream,
     hub: &Hub,
     web: Option<&std::path::Path>,
     origins: &[String],
+    catalog: &SampleCatalog,
     stop: &AtomicBool,
     verbose: bool,
 ) {
@@ -540,6 +594,65 @@ fn handle_connection(
                 body.as_bytes(),
                 head_only,
             );
+        }
+        "/samples/index.json" => {
+            let body = catalog.index_json();
+            let _ = http::respond(
+                &mut stream,
+                200,
+                "OK",
+                &[
+                    ("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Cache-Control", "no-store"),
+                ],
+                body.as_bytes(),
+                head_only,
+            );
+        }
+        p if p.starts_with("/samples/file?") => {
+            let query = p.strip_prefix("/samples/file?").unwrap_or("");
+            let served = query_param(query, "lib")
+                .zip(query_param(query, "path"))
+                .and_then(|(lib, rel)| catalog.resolve_file(&lib, &rel))
+                .and_then(|path| std::fs::read(&path).ok().map(|b| (path, b)));
+            match served {
+                Some((file, body)) => {
+                    let ctype = match file
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|s| s.to_ascii_lowercase())
+                        .as_deref()
+                    {
+                        Some("wav") => "audio/wav",
+                        Some("aif" | "aiff") => "audio/aiff",
+                        Some("ogg") => "audio/ogg",
+                        _ => "application/octet-stream",
+                    };
+                    let _ = http::respond(
+                        &mut stream,
+                        200,
+                        "OK",
+                        &[
+                            ("Content-Type", ctype),
+                            ("Access-Control-Allow-Origin", "*"),
+                            ("Cache-Control", "max-age=3600"),
+                        ],
+                        &body,
+                        head_only,
+                    );
+                }
+                None => {
+                    let _ = http::respond(
+                        &mut stream,
+                        404,
+                        "Not Found",
+                        &[],
+                        b"not found\n",
+                        head_only,
+                    );
+                }
+            }
         }
         path => serve_static(&mut stream, web, path, head_only),
     }

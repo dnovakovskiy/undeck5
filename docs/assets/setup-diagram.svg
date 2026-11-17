@@ -1,109 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-label="player5 local installation and booth sync architecture diagram">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 290" width="960" height="290" role="img" aria-label="Simple 3-step install and DJ booth connection flow">
   <defs>
-    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bgSt" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0b0e17" />
-      <stop offset="100%" stop-color="#141824" />
+      <stop offset="100%" stop-color="#131826" />
     </linearGradient>
-    <linearGradient id="boxDark" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#131926" />
-      <stop offset="100%" stop-color="#0e131d" />
-    </linearGradient>
-    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,1 L7,4 L0,7 Z" fill="#00e5ff" />
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#38bdf8" />
     </marker>
-    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,1 L7,4 L0,7 Z" fill="#ff6a2b" />
-    </marker>
-    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,1 L7,4 L0,7 Z" fill="#a3e635" />
-    </marker>
-    <marker id="arrowPink" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,1 L7,4 L0,7 Z" fill="#ff2bd6" />
+    <marker id="arrG" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#34d399" />
     </marker>
   </defs>
 
-  <!-- Outer Frame -->
-  <rect x="2" y="2" width="956" height="396" rx="16" fill="url(#cardBg)" stroke="#263042" stroke-width="2" />
+  <rect x="2" y="2" width="956" height="286" rx="18" fill="url(#bgSt)" stroke="#263042" stroke-width="2" />
 
-  <!-- Header -->
-  <text x="28" y="34" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="800" letter-spacing="1.4" fill="#00e5ff">PLAYER5 · LOCAL PROTOTYPE INSTALL &amp; BOOTH HOOKUP</text>
-  <text x="932" y="34" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#94a3b8">CLOCK SYNC + AUDIO INTO MIXER CH 5</text>
-  <line x1="28" y1="48" x2="932" y2="48" stroke="#243044" stroke-width="1" />
+  <text x="36" y="42" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">
+    Install &amp; Plug Into Any Booth in 3 Steps
+  </text>
+  <text x="924" y="42" text-anchor="end" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="700" fill="#34d399">
+    No Plugins · Runs Locally
+  </text>
 
-  <!-- Column 1: Pick Your Install Path -->
-  <text x="28" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" letter-spacing="1" fill="#fbbf24">1. INSTALL / RUN ON YOUR LAPTOP</text>
+  <!-- Step 1 -->
+  <g transform="translate(36, 70)">
+    <rect width="260" height="176" rx="14" fill="#121826" stroke="#38bdf8" stroke-width="2" />
+    <text x="20" y="34" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="800" fill="#38bdf8">STEP 1 · LAUNCH</text>
+    <text x="20" y="66" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" fill="#f8fafc">Open on Laptop</text>
+    <text x="20" y="98" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#e2e8f0">• Double-click offline HTML</text>
+    <text x="20" y="124" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#94a3b8">  or run local bridge:</text>
+    <text x="20" y="152" font-family="ui-monospace, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fbbf24">localhost:17505</text>
+  </g>
 
-  <!-- Option 0 -->
-  <rect x="28" y="84" width="262" height="86" rx="10" fill="url(#boxDark)" stroke="#a3e635" stroke-width="1.5" />
-  <text x="42" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" fill="#a3e635">OPTION 0 · ZERO-BUILD OFFLINE</text>
-  <text x="42" y="126" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="700" fill="#f8fafc">player5-offline.html</text>
-  <text x="42" y="144" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#94a3b8">Download v0.1.0 &amp; double-click</text>
-  <text x="42" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#94a3b8">Runs solo / Tap / Spacebar immediately</text>
+  <line x1="304" y1="158" x2="342" y2="158" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arr)" />
 
-  <!-- Option A/B -->
-  <rect x="28" y="184" width="262" height="114" rx="10" fill="url(#boxDark)" stroke="#00e5ff" stroke-width="1.5" />
-  <text x="42" y="206" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" fill="#00e5ff">OPTION A/B · FULL SOURCE + BRIDGE</text>
-  <text x="42" y="226" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#f8fafc">1. ./scripts/build-wasm.sh</text>
-  <text x="42" y="244" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#f8fafc">2. cd apps/web &amp;&amp; npm i &amp;&amp; npm run build</text>
-  <text x="42" y="262" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#f8fafc">3. cargo run --release -p player5-bridge</text>
-  <text x="42" y="282" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#38bdf8">Open http://localhost:17505</text>
+  <!-- Step 2 -->
+  <g transform="translate(350, 70)">
+    <rect width="260" height="176" rx="14" fill="#121826" stroke="#34d399" stroke-width="2" />
+    <text x="20" y="34" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="800" fill="#34d399">STEP 2 · SOUNDS</text>
+    <text x="20" y="66" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" fill="#f8fafc">Plug In Your Kits</text>
+    <text x="20" y="98" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#e2e8f0">• Built-in Analog Synth</text>
+    <text x="20" y="124" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#e2e8f0">• Pick any NI / WAV folder</text>
+    <text x="20" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#34d399">• Auto-mounts /Users/Shared</text>
+  </g>
 
-  <!-- MIDI direct -->
-  <rect x="28" y="310" width="262" height="62" rx="10" fill="url(#boxDark)" stroke="#ff2bd6" stroke-width="1.3" />
-  <text x="42" y="332" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" fill="#ff7ce5">USB / DIN MIDI (NO BRIDGE NEEDED)</text>
-  <text x="42" y="352" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">Plug USB-MIDI in Chrome → Clock: MIDI</text>
+  <line x1="618" y1="158" x2="656" y2="158" stroke="#34d399" stroke-width="2.5" marker-end="url(#arrG)" />
 
-  <!-- Column 2: Sync Bridge & Laptop -->
-  <text x="342" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" letter-spacing="1" fill="#fbbf24">2. SYNC ENGINE (CHOOSE ANY)</text>
-
-  <!-- Bridge Box -->
-  <rect x="342" y="84" width="276" height="164" rx="12" fill="url(#boxDark)" stroke="#fbbf24" stroke-width="1.6" />
-  <text x="358" y="108" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="800" fill="#fbbf24">player5-bridge (Rust UDP/WS)</text>
-  <text x="358" y="130" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#e2e8f0">• --source prolink   (Pioneer CDJ LAN)</text>
-  <text x="358" y="150" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#e2e8f0">• --source opus      (Opus Quad)</text>
-  <text x="358" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#e2e8f0">• --source link      (Ableton Link Wi-Fi)</text>
-  <text x="358" y="190" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#e2e8f0">• --source sim       (Test BPM without gear)</text>
-  <rect x="358" y="206" width="244" height="28" rx="6" fill="#0b0e17" stroke="#334155" stroke-width="1" />
-  <text x="480" y="224" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#38bdf8">ws://127.0.0.1:17505/ws · ±0.0 ms</text>
-
-  <!-- Player5 Browser Core Box -->
-  <rect x="342" y="264" width="276" height="108" rx="12" fill="url(#boxDark)" stroke="#ff6a2b" stroke-width="1.8" />
-  <text x="358" y="288" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="900" fill="#f8fafc">player5 <tspan font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#ff6a2b">MACBOOK AIR</tspan></text>
-  <text x="358" y="309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">4 Machines: TR · Pattern Player · DJS · RMX</text>
-  <text x="358" y="328" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">⌥1–⌥5 Switch · \ Active/Passive</text>
-  <text x="358" y="347" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a3e635">Sync Click + Latency Offset (ms) + ;/'</text>
-
-  <!-- Column 3: Friends' Booth Rig -->
-  <text x="670" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="800" letter-spacing="1" fill="#fbbf24">3. THE B2B BOOTH RIG</text>
-
-  <!-- CDJ / Switch -->
-  <rect x="670" y="84" width="262" height="90" rx="10" fill="url(#boxDark)" stroke="#38bdf8" stroke-width="1.5" />
-  <text x="686" y="108" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="800" fill="#38bdf8">4× CDJs + DJM ETHERNET SWITCH</text>
-  <text x="686" y="128" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">USB-C → Cat5e/Cat6 into booth switch</text>
-  <text x="686" y="146" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">Reads Master Beat 1..4 (UDP 50000–50002)</text>
-  <text x="686" y="164" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#94a3b8">Passive listener — zero interference</text>
-
-  <!-- Ableton Link Peer -->
-  <rect x="670" y="186" width="262" height="82" rx="10" fill="url(#boxDark)" stroke="#a3e635" stroke-width="1.5" />
-  <text x="686" y="210" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="800" fill="#a3e635">ABLETON / TRAKTOR / SERATO</text>
-  <text x="686" y="230" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">Same Wi-Fi / LAN (UDP 20808)</text>
-  <text x="686" y="248" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">Click LINK on both → bidirectional BPM</text>
-
-  <!-- Audio Output to Mixer -->
-  <rect x="670" y="280" width="262" height="92" rx="10" fill="url(#boxDark)" stroke="#ff6a2b" stroke-width="1.5" />
-  <text x="686" y="304" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="800" fill="#ff6a2b">MIXER RETURN / AUX IN (AUDIO)</text>
-  <text x="686" y="324" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">MacBook 3.5mm / USB Audio Interface</text>
-  <text x="686" y="342" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#cbd5e1">→ DJM Ch 5 / Return / Line Input</text>
-  <text x="686" y="360" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#fbbf24">Tip: Use KICK CUT [.] when layering</text>
-
-  <!-- Arrows -->
-  <line x1="290" y1="127" x2="338" y2="292" stroke="#a3e635" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowGreen)" />
-  <line x1="290" y1="240" x2="338" y2="170" stroke="#00e5ff" stroke-width="1.8" marker-end="url(#arrowCyan)" />
-  <line x1="290" y1="341" x2="338" y2="330" stroke="#ff2bd6" stroke-width="1.6" marker-end="url(#arrowPink)" />
-
-  <line x1="480" y1="248" x2="480" y2="262" stroke="#00e5ff" stroke-width="2" marker-end="url(#arrowCyan)" />
-
-  <line x1="670" y1="128" x2="622" y2="128" stroke="#00e5ff" stroke-width="1.8" marker-end="url(#arrowCyan)" />
-  <line x1="670" y1="224" x2="622" y2="190" stroke="#a3e635" stroke-width="1.8" marker-end="url(#arrowGreen)" />
-  <line x1="618" y1="326" x2="666" y2="326" stroke="#ff6a2b" stroke-width="2" marker-end="url(#arrowOrange)" />
+  <!-- Step 3 -->
+  <g transform="translate(664, 70)">
+    <rect width="260" height="176" rx="14" fill="#121826" stroke="#ff6a2b" stroke-width="2" />
+    <text x="20" y="34" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="800" fill="#ff6a2b">STEP 3 · SYNC &amp; PLAY</text>
+    <text x="20" y="66" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" fill="#f8fafc">Lock to the Booth</text>
+    <text x="20" y="98" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#e2e8f0">• Ethernet → CDJ Pro DJ Link</text>
+    <text x="20" y="124" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#e2e8f0">• Wi-Fi → Ableton Link</text>
+    <text x="20" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="13.5" fill="#fbbf24">• Audio → Mixer Ch 5 / Aux</text>
+  </g>
 </svg>

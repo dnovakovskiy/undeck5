@@ -12,6 +12,7 @@
 pub mod base64;
 pub mod clock;
 pub mod http;
+pub mod samples;
 pub mod server;
 pub mod sha1;
 pub mod sources;

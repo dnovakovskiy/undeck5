@@ -132,6 +132,7 @@ export function template(o: TemplateOptions): string {
       <select id="kit" aria-label="Load a drum kit voicing" title="Switch analog drum machine voicing without changing the step pattern">
         <option value="">Drum kit…</option>${kitOptions}
       </select>
+      <button id="samples-open-btn" type="button" class="samples-open-btn" title="Plug in your own Native Instruments / WAV drum kits &amp; manage ★ Favorites">NI / WAV Kits</button>
       <button id="undo" type="button" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl/Cmd+Z)">Undo</button>
       <button id="clear" type="button" title="Clear every step on active machine (undo restores)">Clear</button>
       <button id="share" type="button" title="${o.single ? "Copy the pattern code" : "Copy a link to this pattern"}">Share</button>
@@ -689,6 +690,28 @@ export function template(o: TemplateOptions): string {
   </section>
 
   ${howToModalMarkup()}
+
+  <div id="samples-modal" class="samples-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="samples-title">
+    <div class="samples-modal">
+      <div class="panel-head samples-head">
+        <div>
+          <span class="howto-badge">OWNED SAMPLE LOADER · WAV / AIFF / NI LIBRARIES</span>
+          <h2 id="samples-title">Plug In Your Own Sounds &amp; ★ Favorites</h2>
+        </div>
+        <button id="samples-close" type="button" class="small" aria-label="Close Sample Browser">Close (Esc)</button>
+      </div>
+      <div class="samples-toolbar">
+        <button id="samples-pick-folder" type="button" class="toggle">+ Load NI / WAV Folder</button>
+        <input id="samples-folder-input" type="file" webkitdirectory multiple accept="audio/*" hidden />
+        <button id="samples-autofill" type="button" class="small">Auto-Fill Kit</button>
+        <button id="samples-fav-filter" type="button" class="toggle small" aria-pressed="false">★ Favorites Only</button>
+        <button id="samples-clear-all" type="button" class="small">Revert All to SYNTH</button>
+      </div>
+      <div id="samples-libs" class="samples-libs" role="group" aria-label="Sample libraries"></div>
+      <div id="samples-slots" class="samples-slots" role="group" aria-label="10 drum voice slots"></div>
+      <div id="samples-list" class="samples-list" role="region" aria-label="Available drum hits"></div>
+    </div>
+  </div>
 
   <footer class="foot">
     <span>Space play · ~ cycle decks · TR: 1–0 voices, A–K/Z–, steps · DJS: 1–4/Q–R/A–F/Z–V 16 pads, 5–8 modes, 9/0 scenes · RMX: 1–4 pads, 5–0 rolls, Q/W/E kills, Y–P/A–G FX, Hold R drop · ? guide</span>

@@ -681,6 +681,72 @@ export const PRESETS: readonly Preset[] = [
     },
     "sub-boom",
   ),
+
+  // ---- Berlin Underground / Maschine-Inspired Rhythms ----
+  preset(
+    "berlin-tresor",
+    "Berlin Tresor Pulse",
+    "Techno",
+    "Berlin concrete warehouse techno: driving 4/4 kick, offbeat sub rumble, polymetric rim & industrial hats",
+    {
+      bpm: 136,
+      shuffle: 0.04,
+      accent: 0.84,
+      flam: 0.35,
+      voices: {
+        kick: { steps: "X---X---X---X---", tune: 0.14, decay: 0.88, tone: 0.94, level: 1.0 },
+        low_tom: { steps: "--x---x---x---x-", tune: 0.06, decay: 0.92, level: 0.9 },
+        rim: { steps: "---x--x---x---x-", tune: 0.62, echo_send: 0.65, level: 0.72 },
+        clap: { steps: "----X-------X---", reverb_send: 0.55, level: 0.86 },
+        closed_hat: { steps: "xxXxxxXxxxXxxxXx", decay: 0.24, level: 0.74 },
+        open_hat: { steps: "--X---X---X---X-", decay: 0.72, level: 0.8 },
+      },
+    },
+    "hard-drive",
+  ),
+  preset(
+    "deep-matter-dub",
+    "Deep Matter Dub",
+    "Techno",
+    "Deep Berlin dub-techno groove: swung sub-boom, sparse rimshot echo throws & hypnotic tom counterpoint",
+    {
+      bpm: 127,
+      shuffle: 0.28,
+      accent: 0.76,
+      flam: 0.4,
+      voices: {
+        kick: { steps: "X---X---X---X---", tune: 0.1, decay: 0.94, tone: 0.3, level: 0.98 },
+        low_tom: { steps: "--x----x--x---x-", tune: 0.12, decay: 0.85, level: 0.86 },
+        mid_tom: { steps: "-----------x----", tune: 0.38, echo_send: 0.78, level: 0.78 },
+        rim: { steps: "----x--x------x-", echo_send: 0.85, reverb_send: 0.6, level: 0.76 },
+        closed_hat: { steps: "x-xxx-xxx-xxx-xx", decay: 0.2, level: 0.68 },
+        open_hat: { steps: "--x-------x---X-", decay: 0.68, level: 0.75 },
+      },
+    },
+    "sub-boom",
+  ),
+  preset(
+    "warehouse-poly",
+    "Industrial Polyrhythm",
+    "Techno",
+    "Maschine-style hypnotic 13-step polyrhythmic percussion locked over a 16-step sub kick",
+    {
+      bpm: 134,
+      shuffle: 0.08,
+      accent: 0.82,
+      flam: 0.45,
+      last_step: 16,
+      voices: {
+        kick: { steps: "X---X---X---X---", tune: 0.16, decay: 0.86, level: 1.0 },
+        snare: { steps: "--x----x----f---", tune: 0.42, snappy: 0.84, level: 0.82 },
+        high_tom: { steps: "x--x--x---x--x--", tune: 0.66, echo_send: 0.55, level: 0.74 },
+        cowbell: { steps: "---x-----x----x-", tune: 0.48, level: 0.68 },
+        closed_hat: { steps: "x-xxx-xXx-xxx-xx", decay: 0.26, level: 0.74 },
+        open_hat: { steps: "--X---X---X---X-", decay: 0.74, level: 0.82 },
+      },
+    },
+    "hard-drive",
+  ),
 ];
 
 export const DEFAULT_PRESET = PRESETS[0]!;

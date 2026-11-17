@@ -108,6 +108,20 @@ Open **`http://localhost:5173`**, hit **`Space`**, and start annoying your B2B f
 
 ---
 
+## 🥁 Plugging In Your Own Sounds (Native Instruments Maschine / Custom `.wav` Kits)
+
+Out of the box, `player5` synthesizes every drum in pure Rust math (`[SYNTH]`) so the repo stays lightweight and 100% free of copyrighted audio. Want real studio punch from libraries you **already own on your laptop** (like **NI Maschine 2 Factory**, **Deep Matter**, **Expansions**, or any personal `.wav` pack)?
+
+1. **Zero-Setup Browser Picker (Works Everywhere):**
+   - Click **`NI / WAV Kits`** in the top toolbar → **`+ Load NI / WAV Folder`** → point it at e.g. `/Users/Shared/Deep Matter Library/Samples/Drums` or `/Users/Shared/Maschine 2 Factory Library Library/Samples/Drums`.
+   - `player5` auto-maps **Kick, Snare, Clap, Closed/Open Hat, Rim, Toms & Cowbell** straight into the AudioWorklet sampler (`Auto-Fill Kit`), and every plugged-in voice gets an emerald **`[WAV]`** badge + sample name so you never confuse NI samples with built-in `[SYNTH]`.
+2. **Automatic Local Mount via `player5-bridge`:**
+   - Start `player5-bridge` (or pass `--samples-dir "/path/to/your/drums"`). On macOS it automatically discovers NI sample libraries in `/Users/Shared` and serves them locally at `http://localhost:17505` with zero copying into the repo.
+3. **Bookmark Your Go-To Hits (`★ Favorites`):**
+   - Click **`☆ → ★`** next to any sample in the browser to pin your favorite NI kicks, claps, and tops to the top of the list, and toggle **`★ Favorites Only`** mid-set.
+
+---
+
 ## 🔗 Syncing with Friends' CDJs, Opus Quad, Ableton Link & MIDI
 
 | Booth Setup | What You Need | Exact Setup Steps |
@@ -119,12 +133,15 @@ Open **`http://localhost:5173`**, hit **`Space`**, and start annoying your B2B f
 
 ---
 
-## 🧭 How Is `player5` Different from Existing GitHub Projects?
+## 🧭 Where `player5`'s Specific Novelty Sits (Even Though Nobody Asked for It)
 
-Existing open-source repos solve **either** network clock translation (with zero instrument) **or** a single browser drum toy (with zero booth sync):
-- **Sync-Only Bridges** (`Deep-Symmetry/beat-link-trigger`, `strikeout/autoblink`, `evanpurkhiser/prolink-go`, `kyleawayan/opus-quad-pro-dj-link-analysis`): Translate Pro DJ Link into MIDI/Link, but require a separate DAW or \$800+ hardware box to make sound.
-- **Browser Grooveboxes / Partial Clones** (`io-8O8` web clones, `gdamdam/mpump`, `x-1000`, `noturderek/djs1000-emulator`): Lack native Pioneer Pro DJ Link + Opus Quad + MIDI PLL clock following and don't combine synthesis, pad scenes, pattern layering, and club remix FX in one deterministic engine.
-- **`player5`** fuses **every DJ booth sync protocol** (Pro DJ Link, Opus Quad, Ableton Link, 24-PPQN MIDI PLL, Tap + phase/latency offset) directly into a **multi-device Rust/Wasm performance instrument** (`TR-REC` + `Pattern Player` + `DJS-1000` + `RMX-1000`) built for the 3rd friend at a B2B session.
+Look, running a reverse-engineered CDJ protocol in Rust so a 3rd friend can mash drum rolls on a MacBook keyboard behind two serious techno DJs is inherently absurd — which is exactly why it's fun. Surprisingly, though, **nothing else on GitHub actually puts all the pieces together**:
+
+- **Sync-Only Bridges** (`Deep-Symmetry/beat-link-trigger`, `strikeout/autoblink`, `Suva/pro-dj-link-to-midi`, `evanpurkhiser/prolink-go`, `kyleawayan/opus-quad-pro-dj-link-analysis`): Brilliant at decoding Pro DJ Link / Opus Quad packets, **zero sound engine**. You still need Ableton Live or an \$800+ hardware drum machine on the receiving end.
+- **Browser Drum Toys** (`io-8O8` web clones, `gdamdam/mpump`, `x-1000`, `noturderek/djs1000-emulator`): Fun in isolation, **useless in an actual DJ booth** — they lack native Pioneer Pro DJ Link + Opus Quad + 24-PPQN MIDI PLL phase-locking, or require proprietary QEMU firmware images.
+- **`player5` = All Booth Sync Protocols Built Directly Into a Multi-Device Instrument:**
+  1. **Omni-Protocol Clock Follower Inside the Audio Engine (`core/clock` + `apps/bridge`):** Native clean-room Rust followers for **Pioneer Pro DJ Link**, **AlphaTheta Opus Quad**, **Ableton Link (`UDP 20808`)**, **USB/DIN MIDI (24 PPQN PLL)**, and **Tap + ms phase/latency calibration** feeding sample-accurate lookahead scheduling directly — no virtual MIDI buses, no JVM, no extra DAW.
+  2. **4 Club Workflows + Owned NI `.wav` Samples + Built-In Synth (`core/dsp` + `host.js`):** **TR Step Sequencer**, **Traktor-style Pattern Player** (with tempo-synced noise buildups & rolling post-filter drop tails), **DJS-1000 Pad/Scene Deck**, and **RMX-1000 Remix Station** — all playable from one laptop keyboard with **`ACTIVE`/`PASSIVE`** zero-bleed routing.
 
 ---
 

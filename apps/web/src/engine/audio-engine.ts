@@ -122,6 +122,9 @@ export class AudioEngine {
   private quantizedLaunch = false;
   /** What the current runtime was last told (start/stop). */
   private runtimePlaying = false;
+  private voiceSamples: Array<{ pcm: Float32Array; name: string } | null> = new Array(10).fill(null);
+  private sampleMeta: Record<string, unknown> | null = null;
+  private decodeCtx: AudioContext | null = null;
 
   state: AudioState = "idle";
   mode: EngineMode | null = null;
@@ -356,6 +359,11 @@ export class AudioEngine {
     this.send({ type: "clock-mode", mode: this.clockMode });
     this.send({ type: "vfx-level", level: this.voiceFxLevel });
     this.send({ type: "rmx-state", state: this.rmxState as unknown as Record<string, unknown> });
+    if (this.sampleMeta) this.send({ type: "sample-meta", meta: this.sampleMeta });
+    for (let i = 0; i < this.voiceSamples.length; i++) {
+      const s = this.voiceSamples[i];
+      if (s) this.send({ type: "set-voice-sample", voiceIdx: i, pcm: s.pcm, name: s.name });
+    }
     this.runtimePlaying = false;
     this.syncTransport();
   }
@@ -653,6 +661,46 @@ export class AudioEngine {
   setVoiceFxLevel(fxLevel: number): void {
     this.voiceFxLevel = Math.max(0, Math.min(1, fxLevel));
     this.send({ type: "vfx-level", level: this.voiceFxLevel });
+  }
+
+  /** Decodes a WAV/AIFF/MP3/OGG buffer into mono Float32Array PCM at the engine sample rate. */
+  async decodeSampleBytes(data: ArrayBuffer): Promise<Float32Array> {
+    const Ctor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = this.ctx ?? (this.decodeCtx ??= new Ctor());
+    const decoded = await ctx.decodeAudioData(data.slice(0));
+    const len = decoded.length;
+    const chs = decoded.numberOfChannels;
+    const mono = new Float32Array(len);
+    for (let c = 0; c < chs; c++) {
+      const ch = decoded.getChannelData(c);
+      const scale = 1 / chs;
+      for (let i = 0; i < len; i++) mono[i] = (mono[i] ?? 0) + (ch[i] ?? 0) * scale;
+    }
+    return mono;
+  }
+
+  setVoiceSample(voiceIdx: number, pcm: Float32Array, name: string): void {
+    if (voiceIdx < 0 || voiceIdx >= 10) return;
+    this.voiceSamples[voiceIdx] = { pcm, name };
+    this.send({ type: "set-voice-sample", voiceIdx, pcm, name });
+  }
+
+  clearVoiceSample(voiceIdx: number): void {
+    if (voiceIdx < 0 || voiceIdx >= 10) return;
+    this.voiceSamples[voiceIdx] = null;
+    this.send({ type: "clear-voice-sample", voiceIdx });
+  }
+
+  clearAllVoiceSamples(): void {
+    this.voiceSamples.fill(null);
+    this.send({ type: "clear-all-samples" });
+  }
+
+  setSampleMeta(meta: Record<string, unknown>): void {
+    this.sampleMeta = meta;
+    this.send({ type: "sample-meta", meta });
   }
 
   /**

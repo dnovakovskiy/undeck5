@@ -49,6 +49,7 @@ import { Grid } from "./ui/grid";
 import { HowToExplainer } from "./ui/how-to";
 import { formatDb, Meter } from "./ui/meter";
 import { RmxPanel } from "./ui/rmx-panel";
+import { SampleBankController } from "./ui/sample-bank";
 import { template } from "./ui/template";
 import {
   defaultTraktorSpec,
@@ -810,6 +811,23 @@ const traktor = new TraktorPanel($("traktor-panel"), {
 
 const howTo = new HowToExplainer(app);
 
+const sampleBank = new SampleBankController(app, {
+  audio,
+  onChange() {
+    renderVoicePanel();
+    pushEnginePattern();
+    renderSampleButtons();
+  },
+  onSay: (msg) => say(msg),
+});
+
+function renderSampleButtons(): void {
+  const n = sampleBank.loadedCount;
+  const btn = $<HTMLButtonElement>("samples-open-btn");
+  btn.textContent = n > 0 ? `WAV Kit (${n}/10)` : "NI / WAV Kits";
+  btn.dataset.hasWav = String(n > 0);
+}
+
 // ---- surface mode & individual machine power switches ----
 
 function flashButtonEl(el: HTMLElement | null): void {
@@ -1218,7 +1236,19 @@ function renderGrooveAndFxControls(): void {
 function renderVoicePanel(): void {
   const info = voiceInfo(selected);
   const target = focusedSpec();
-  $("voice-title").textContent = `${info.short} · ${info.name}`;
+  const loadedWav = sampleBank.getLoaded(selected);
+  $("voice-title").innerHTML = loadedWav
+    ? `${info.short} · ${info.name} <span class="src-badge wav">WAV: ${loadedWav.name}</span>`
+    : `${info.short} · ${info.name} <span class="src-badge synth">SYNTH</span>`;
+  for (const v of VOICES) {
+    const rowEl = document.querySelector<HTMLElement>(`.row[data-voice="${v.id}"]`);
+    if (rowEl) {
+      const wav = sampleBank.getLoaded(v.id);
+      rowEl.dataset.hasWav = String(Boolean(wav));
+      const lbl = rowEl.querySelector<HTMLElement>(".voice-btn");
+      if (lbl) lbl.title = wav ? `WAV Sample: ${wav.name} (${wav.source})` : `${v.name} (Synthesized DSP)`;
+    }
+  }
   const v = target.voices[selected];
   const existing = voiceControls.dataset.voice === selected;
   if (!existing) {
@@ -1620,10 +1650,27 @@ function buildEngineSpec(): PatternSpec {
 
 function pushEnginePattern(): void {
   const engineSpec = buildEngineSpec();
-  audio.setPattern(specBytes(engineSpec));
+  // Forward full voice metadata to Host WAV Sampler, then silence Wasm synth on WAV-backed voices
+  audio.setSampleMeta({
+    variation: engineSpec.variation,
+    lastStep: engineSpec.last_step,
+    accent: engineSpec.accent,
+    flam: engineSpec.flam,
+    voices: VOICES.map((v) => engineSpec.voices[v.id]),
+  });
+  const anyWav = sampleBank.hasAnyLoaded();
+  const synthSpec = anyWav ? cloneSpec(engineSpec) : engineSpec;
+  if (anyWav) {
+    for (const v of VOICES) {
+      if (sampleBank.getLoaded(v.id)) {
+        synthSpec.voices[v.id].level = 0;
+      }
+    }
+  }
+  audio.setPattern(specBytes(synthSpec));
   const trIsPrimary =
     powerTr && (!isTraktorFocused() || !powerTraktor) && (!isDjsFocused() || !powerDjs);
-  audio.setKit(trIsPrimary ? activeKitId : "", engineSpec);
+  audio.setKit(trIsPrimary ? activeKitId : "", synthSpec);
 }
 
 function buildShareUrl(code: string): string {
@@ -2365,6 +2412,11 @@ function applyPresetByIndex(idx: number): void {
 window.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (e.key === "Escape") {
+    if (!$("samples-modal").hidden) {
+      e.preventDefault();
+      sampleBank.close();
+      return;
+    }
     if (howTo.isOpen) {
       e.preventDefault();
       howTo.close();

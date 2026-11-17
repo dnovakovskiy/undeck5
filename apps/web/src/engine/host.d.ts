@@ -67,6 +67,10 @@ export type HostMessage =
   | { type: "grid-meta"; shuffle: number; lastStep: number }
   | { type: "rmx-state"; state: Record<string, unknown> }
   | { type: "vfx-level"; level: number }
+  | { type: "set-voice-sample"; voiceIdx: number; pcm: Float32Array; name: string }
+  | { type: "clear-voice-sample"; voiceIdx: number }
+  | { type: "clear-all-samples" }
+  | { type: "sample-meta"; meta: Record<string, unknown> }
   | { type: "ext-gain"; gain: number }
   | { type: "sync-click" }
   | { type: "dispose" };

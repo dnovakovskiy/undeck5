@@ -18,6 +18,8 @@ OPTIONS:
     --port <port>                      TCP port (default: 17505; 0 = any free port)
     --bind <address>                   Address to listen on (default: 0.0.0.0)
     --web <dir>                        Also serve the built web app from <dir>
+    --samples-dir <dir>                Serve local WAV/AIFF drum samples from <dir> (repeatable;
+                                       auto-detects NI libraries in /Users/Shared if omitted)
     --allow-origin <origin>            Also let pages from <origin> use the WebSocket,
                                        e.g. https://example.org (repeatable; * = any)
     --device-number <n>                Pro DJ Link device number to claim (default: 5)
@@ -69,6 +71,16 @@ fn parse(args: &[String]) -> Result<Config, String> {
                     return Err(format!("--web {} is not a directory", dir.display()));
                 }
                 config.web = Some(dir);
+            }
+            "--samples-dir" => {
+                let dir = PathBuf::from(value("--samples-dir")?);
+                if !dir.is_dir() {
+                    return Err(format!(
+                        "--samples-dir {} is not a directory",
+                        dir.display()
+                    ));
+                }
+                config.samples_dirs.push(dir);
             }
             "--device-number" => {
                 let v = value("--device-number")?;
