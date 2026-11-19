@@ -801,16 +801,7 @@ export class HowToExplainer {
               ? "Sync Procedure · Pioneer CDJ, Ableton Link & MIDI Clock"
               : "Operating Procedure · TR-REC 64-Step Drum Sequencer";
 
-    this.kbHeadingEl.textContent =
-      m === "traktor"
-        ? "MacBook Air Key Map · Pattern Player (Sub / Breaks / Buildup)"
-        : m === "rmx"
-          ? "MacBook Air Key Map · RMX-1000 Station Mode"
-          : m === "djs"
-            ? "MacBook Air Key Map · Pioneer DJS-1000 Deck Mode"
-            : m === "sync"
-              ? "MacBook Air Key Map · Clock, Tempo & Phase Alignment"
-              : "MacBook Air Key Map · TR Step Sequencer Mode";
+    this.kbHeadingEl.textContent = "Your keyboard is the machine";
 
     const trkOverrides: Record<string, [string, string]> = {
       Digit1: ["Pat 1 Sub", C_BLUE],
@@ -3020,19 +3011,60 @@ export function howToModalMarkup(): string {
     <div class="panel howto-modal">
       <div class="panel-head howto-head">
         <div>
-          <span class="howto-badge">3Blue1Brown Visual Manual · ASD-STE100</span>
-          <h2 id="howto-title">How to Operate player5, Hotkeys &amp; DJ Sync</h2>
+          <h2 id="howto-title">Quick guide</h2>
         </div>
         <div class="howto-mode-tabs" role="group" aria-label="Choose guide section">
-          <button id="howto-mode-seq" type="button" class="howto-mode-tab" aria-pressed="true">TR Sequencer</button>
+          <button id="howto-mode-seq" type="button" class="howto-mode-tab" aria-pressed="true">TR Drums</button>
           <button id="howto-mode-traktor" type="button" class="howto-mode-tab" aria-pressed="false">Pattern Player</button>
-          <button id="howto-mode-djs" type="button" class="howto-mode-tab" aria-pressed="false">DJS-1000 Deck</button>
-          <button id="howto-mode-rmx" type="button" class="howto-mode-tab" aria-pressed="false">RMX-1000 Station</button>
-          <button id="howto-mode-sync" type="button" class="howto-mode-tab" aria-pressed="false">DJ Sync (CDJ / Link)</button>
+          <button id="howto-mode-djs" type="button" class="howto-mode-tab" aria-pressed="false">DJS-1000</button>
+          <button id="howto-mode-rmx" type="button" class="howto-mode-tab" aria-pressed="false">RMX FX</button>
+          <button id="howto-mode-sync" type="button" class="howto-mode-tab" aria-pressed="false">Sync</button>
         </div>
-        <button id="howto-close" type="button" class="small" aria-label="Close How To guide">Close (Esc)</button>
+        <button id="howto-close" type="button" class="small" aria-label="Close How To guide">Close</button>
       </div>
 
+      <section class="howto-quick-wrap" aria-label="30-second guide">
+        <div class="howto-quick" data-mode="sequencer">
+          <h3>TR Drums in 30 seconds</h3>
+          <p class="hq-lead">Works like a real drum machine.</p>
+          <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Press Play</b><p>Space bar, or the orange button.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Click squares</b><p>Each row is a drum, each column a 16th note.</p></div><div class="hq-step"><span class="hq-num">3</span><b>Pick a pattern</b><p>Start from a pattern and change it.</p></div></div>
+        </div>
+        <div class="howto-quick" data-mode="traktor">
+          <h3>Pattern Player in 30 seconds</h3>
+          <p class="hq-lead">Layer a ready-made groove over the DJ's track.</p>
+          <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Tap a pattern</b><p>Techno, house or breaks. It starts on the next bar.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Kick off</b><p>Turn your kick off so it doesn't fight the DJ's kick.</p></div><div class="hq-step"><span class="hq-num">3</span><b>Hold a buildup</b><p>Hold Echo, Noise, Snare or Reverb. Let go on the 1 to drop.</p></div></div>
+        </div>
+        <div class="howto-quick" data-mode="djs">
+          <h3>DJS-1000 in 30 seconds</h3>
+          <p class="hq-lead">16 pads and 8 scenes, like the Pioneer sampler.</p>
+          <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Hit the pads</b><p>Click them, or use 1–4 / Q–R / A–F / Z–V.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Change scene</b><p>Scenes swap the whole pattern. Press 9 or 0.</p></div><div class="hq-step"><span class="hq-num">3</span><b>Roll</b><p>Hold the touch strip for fast repeats.</p></div></div>
+        </div>
+        <div class="howto-quick" data-mode="rmx">
+          <h3>RMX FX in 30 seconds</h3>
+          <p class="hq-lead">Effects on everything you play.</p>
+          <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Kill a band</b><p>Q, W, E cut the lows, mids or highs.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Add a scene effect</b><p>Pick an echo, noise or spiral and raise the level.</p></div><div class="hq-step"><span class="hq-num">3</span><b>Pull the lever</b><p>Hold R through the build, let go to drop.</p></div></div>
+        </div>
+        <div class="howto-quick" data-mode="sync">
+          <h3>Sync in 30 seconds</h3>
+          <p class="hq-lead">Lock player5 to the DJs.</p>
+          <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Connect</b><p>Ethernet to the booth switch for CDJs, or the same Wi-Fi for Ableton Link.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Start the bridge</b><p>Run player5-bridge on your laptop (see README).</p></div><div class="hq-step"><span class="hq-num">3</span><b>Pick the source</b><p>Click the clock button at the top and choose CDJ / bridge or Ableton Link.</p></div></div>
+        </div>
+      </section>
+
+      <details class="howto-more howto-keys" id="howto-keys">
+        <summary>Keyboard map · press a key to try it</summary>
+      <div class="howto-kb-section">
+        <div class="panel-head">
+          <h3 id="howto-kb-title">Your keyboard is the machine</h3>
+          <span class="hint">Press a key to try it</span>
+        </div>
+        <div class="kb-diagram" role="group" aria-label="MacBook Air keyboard shortcuts">
+          ${keyboardLegend}
+        </div>
+      </div>
+      </details>
+      <details class="howto-more" id="howto-more">
+        <summary>Full manual, animated video &amp; all shortcuts</summary>
       <section class="howto-quickstart" id="howto-quickstart" aria-label="Step-by-step quick start">
         <div class="panel-head">
           <h3 id="howto-qs-title">Operating Procedure · TR-REC 64-Step Drum Sequencer</h3>
@@ -3152,15 +3184,7 @@ export function howToModalMarkup(): string {
         <button id="howto-sound" type="button" class="toggle small" aria-pressed="false" title="Toggle harmonic chapter chimes">Chimes: OFF</button>
       </div>
 
-      <div class="howto-kb-section">
-        <div class="panel-head">
-          <h3 id="howto-kb-title">MacBook Air Key Map · TR Step Sequencer Mode</h3>
-          <span class="hint">Click any key below or press it on your keyboard</span>
-        </div>
-        <div class="kb-diagram" role="group" aria-label="MacBook Air keyboard shortcuts">
-          ${keyboardLegend}
-        </div>
-      </div>
+      </details>
     </div>
   </div>`;
 }

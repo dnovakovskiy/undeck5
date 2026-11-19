@@ -815,7 +815,7 @@ export class RmxPanel {
     }
     const lever = $("rmx-release-lever");
     lever.setAttribute("aria-pressed", String(s.releaseHeld));
-    lever.textContent = s.releaseHeld ? "RELEASE FX ENGAGED (RELEASE TO DROP)" : "PULL RELEASE LEVER (HOLD)";
+    lever.textContent = s.releaseHeld ? "Holding · let go to drop" : "Hold to release";
     this.syncRotaryVisuals();
   }
 }

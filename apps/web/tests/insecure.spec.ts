@@ -6,7 +6,7 @@
 
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { app, expectClean, expectPlayheadAdvances, guard, peakDb, play } from "./support/helpers";
+import { app, expectClean, expectPlayheadAdvances, guard, openDrawer, peakDb, play } from "./support/helpers";
 
 test.afterEach(({ page }) => expectClean(page));
 
@@ -23,6 +23,7 @@ test("insecure LAN origin: plays in the ScriptProcessor, explains missing MIDI",
   await page.goto("http://booth.test:4173/");
   expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
   expect(await page.evaluate(() => "serviceWorker" in navigator)).toBe(false);
+  await openDrawer(page, "clock");
   await expect(page.locator(".seg label", { hasText: /^MIDI$/ })).toBeHidden();
   await expect(page.locator(".seg label", { hasText: /^Bridge$/ })).toBeVisible();
   await expect(page.locator("#clock-unavailable")).toContainText("secure page");

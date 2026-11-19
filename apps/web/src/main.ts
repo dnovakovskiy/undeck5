@@ -1,4 +1,5 @@
 import "./style.css";
+import "./ui-v2.css";
 import { midiSupported } from "./clock/midi";
 import { AudioEngine, type AudioState, type EngineMode, type EngineStatus } from "./engine/audio-engine";
 import {
@@ -57,7 +58,7 @@ import {
   type BuildupMacroId,
   type TraktorStemId,
 } from "./ui/traktor-panel";
-import { CONTROL_LABELS, VOICES, voiceInfo, type ControlId, type VoiceId } from "./voices";
+import { CONTROL_LABELS, DRUM_LABELS, VOICES, voiceInfo, type ControlId, type VoiceId } from "./voices";
 
 // ---- environment ----
 
@@ -824,9 +825,111 @@ const sampleBank = new SampleBankController(app, {
 function renderSampleButtons(): void {
   const n = sampleBank.loadedCount;
   const btn = $<HTMLButtonElement>("samples-open-btn");
-  btn.textContent = n > 0 ? `WAV Kit (${n}/10)` : "NI / WAV Kits";
+  btn.textContent = n > 0 ? `My sounds · ${n}/10` : "My sounds";
   btn.dataset.hasWav = String(n > 0);
 }
+
+// ---- drawers (Settings, Clock & sync, Share, Feel), keyboard-hint overlay & first-run tip ----
+
+type DrawerId = "settings" | "clock" | "share";
+const DRAWERS: Readonly<Record<DrawerId, { panel: string; trigger: string }>> = {
+  settings: { panel: "settings-drawer", trigger: "settings-btn" },
+  clock: { panel: "clock", trigger: "sync-pill" },
+  share: { panel: "share-panel", trigger: "share" },
+};
+
+function setDrawer(id: DrawerId, open: boolean): void {
+  const d = DRAWERS[id];
+  $(d.panel).classList.toggle("open", open);
+  $(d.trigger).setAttribute("aria-expanded", String(open));
+}
+
+function isDrawerOpen(id: DrawerId): boolean {
+  return $(DRAWERS[id].panel).classList.contains("open");
+}
+
+$("settings-btn").addEventListener("click", () => setDrawer("settings", !isDrawerOpen("settings")));
+$("settings-close").addEventListener("click", () => setDrawer("settings", false));
+$("sync-pill").addEventListener("click", () => setDrawer("clock", !isDrawerOpen("clock")));
+$("clock-close").addEventListener("click", () => setDrawer("clock", false));
+$("share-close").addEventListener("click", () => setDrawer("share", false));
+$("feel-btn").addEventListener("click", () => {
+  const open = !$("feel-drawer").classList.contains("open");
+  $("feel-drawer").classList.toggle("open", open);
+  $("feel-btn").setAttribute("aria-pressed", String(open));
+});
+
+const SOURCE_LABELS: Readonly<Record<string, string>> = {
+  internal: "Internal clock",
+  tap: "Tap tempo",
+  link: "Ableton Link",
+  bridge: "CDJ / bridge",
+  midi: "MIDI clock",
+};
+
+function renderSyncPill(): void {
+  const src = clock.source;
+  const lock = $("clock").dataset.lock ?? "off";
+  const label = SOURCE_LABELS[src] ?? "Clock";
+  const following = src === "link" || src === "bridge" || src === "midi";
+  $("sync-pill-label").textContent =
+    following && lock === "locked" ? `${label} · locked` : following && lock === "searching" ? `${label} · searching` : label;
+  $("sync-pill").dataset.source = src;
+  $("sync-pill").dataset.lock = lock;
+}
+
+let showKeysPinned = loadString("show-keys") === "true";
+let metaHeld = false;
+const showKeysInput = $<HTMLInputElement>("show-keys");
+showKeysInput.checked = showKeysPinned;
+function renderShowKeys(): void {
+  app.dataset.showKeys = String(showKeysPinned || metaHeld);
+}
+showKeysInput.addEventListener("change", () => {
+  showKeysPinned = showKeysInput.checked;
+  saveString("show-keys", String(showKeysPinned));
+  renderShowKeys();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Meta" && !metaHeld) {
+    metaHeld = true;
+    renderShowKeys();
+  }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Meta" && metaHeld) {
+    metaHeld = false;
+    renderShowKeys();
+  }
+});
+window.addEventListener("blur", () => {
+  if (metaHeld) {
+    metaHeld = false;
+    renderShowKeys();
+  }
+});
+renderShowKeys();
+
+const FIRST_RUN_TEXT: Readonly<Record<SurfaceMode, string>> = {
+  sequencer: "New here? Click squares to add drum hits · <kbd>Space</kbd> plays · hold <kbd>⌘</kbd> to see shortcuts · <kbd>?</kbd> for a 30-second guide",
+  traktor: "Tap a pattern to layer it over the DJ's track · hold a buildup through the breakdown, let go on the 1 · <kbd>?</kbd> for a 30-second guide",
+  djs: "Hit the 16 pads with your mouse or the left side of your keyboard · scenes switch whole patterns · <kbd>?</kbd> for a 30-second guide",
+  rmx: "Kill the lows, mids or highs with the three big buttons · hold the lever to drop · <kbd>?</kbd> for a 30-second guide",
+  booth: "Left: your drum machine · right: the effects · <kbd>⌥~</kbd> moves the keyboard between them",
+};
+let firstRunDone = loadString("first-run-done") === "true";
+function dismissFirstRun(): void {
+  if (firstRunDone) return;
+  firstRunDone = true;
+  saveString("first-run-done", "true");
+  $("first-run-hint").hidden = true;
+}
+function renderFirstRun(): void {
+  if (firstRunDone) return;
+  $("first-run-text").innerHTML = FIRST_RUN_TEXT[surfaceMode];
+  $("first-run-hint").hidden = false;
+}
+$("first-run-close").addEventListener("click", dismissFirstRun);
 
 // ---- surface mode & individual machine power switches ----
 
@@ -850,19 +953,19 @@ function renderMachinePowerControls(): void {
   $("power-rmx-state").textContent = powerRmx ? "ACTIVE" : "PASSIVE";
 
   panelPowerTrBtn.setAttribute("aria-pressed", String(powerTr));
-  $("panel-power-tr-label").textContent = powerTr ? "ACTIVE [\\]" : "PASSIVE [\\]";
+  $("panel-power-tr-label").textContent = powerTr ? "On" : "TR Drums is off — click to turn on";
   $("grid-panel").dataset.machineOff = String(!powerTr);
 
   panelPowerTrkBtn.setAttribute("aria-pressed", String(powerTraktor));
-  $("panel-power-trk-label").textContent = powerTraktor ? "ACTIVE [\\]" : "PASSIVE [\\]";
+  $("panel-power-trk-label").textContent = powerTraktor ? "On" : "Pattern Player is off — click to turn on";
   traktor.setPowered(powerTraktor);
 
   panelPowerDjsBtn.setAttribute("aria-pressed", String(powerDjs));
-  $("panel-power-djs-label").textContent = powerDjs ? "ACTIVE [\\]" : "PASSIVE [\\]";
+  $("panel-power-djs-label").textContent = powerDjs ? "On" : "DJS-1000 is off — click to turn on";
   djs.setPowered(powerDjs);
 
   panelPowerRmxBtn.setAttribute("aria-pressed", String(powerRmx));
-  $("panel-power-rmx-label").textContent = powerRmx ? "ACTIVE [\\]" : "PASSIVE [\\]";
+  $("panel-power-rmx-label").textContent = powerRmx ? "On" : "Effects are bypassed — click to turn on";
   if (rmx.isBypassed !== !powerRmx) {
     rmx.setBypassed(!powerRmx);
   } else {
@@ -876,7 +979,7 @@ function renderMachinePowerControls(): void {
     kbPill.dataset.passive = "false";
     kbPill.dataset.target = hkTarget;
   } else {
-    kbPill.textContent = `⌨ ${MACHINE_LABELS[viewedMachine()]} PASSIVE [\\]`;
+    kbPill.textContent = `⌨ ${MACHINE_LABELS[viewedMachine()]} is off`;
     kbPill.dataset.passive = "true";
     kbPill.dataset.target = "none";
   }
@@ -931,6 +1034,15 @@ function setSurfaceMode(mode: SurfaceMode): void {
     $("share-panel").classList.remove("open-in-booth");
     boothHotkeyFocus = "left";
   }
+  const DEVBAR_TITLES: Readonly<Record<SurfaceMode, string>> = {
+    sequencer: "TR Drums",
+    traktor: "Pattern Player",
+    djs: "DJS-1000",
+    rmx: "RMX FX",
+    booth: "Split",
+  };
+  $("devbar-title").textContent = DEVBAR_TITLES[mode];
+  renderFirstRun();
 
   // Auto-solo the active drum deck unless the user manually toggled machine switches to mix/mute them
   if (!manualDeckMix) {
@@ -1207,11 +1319,13 @@ function renderGrooveAndFxControls(): void {
   const selFx = voiceFx[selected];
   const selInfo = voiceInfo(selected);
   $("vfx-echo").setAttribute("aria-pressed", String(selFx.echo));
-  $("vfx-echo").textContent = `${selInfo.short} Echo [⌥E]`;
+  $("vfx-echo").textContent = "Echo";
   $("vfx-reverb").setAttribute("aria-pressed", String(selFx.reverb));
-  $("vfx-reverb").textContent = `${selInfo.short} Reverb [⌥R]`;
+  $("vfx-reverb").textContent = "Reverb";
   $("vfx-filter").setAttribute("aria-pressed", String(selFx.filter));
-  $("vfx-filter").textContent = `${selInfo.short} Filter [⌥D]`;
+  $("vfx-filter").textContent = "Filter";
+  const vfxHead = document.querySelector<HTMLElement>(".vfx-col .tr-perf-head .label");
+  if (vfxHead) vfxHead.textContent = `Effects on ${(DRUM_LABELS[selected] ?? selInfo.name).toLowerCase()}`;
 
   $("grp-fx-snare").setAttribute("aria-pressed", String(isGroupEchoActive(voiceFx, "snare_clap")));
   $("grp-fx-hats").setAttribute("aria-pressed", String(isGroupEchoActive(voiceFx, "hats")));
@@ -1237,9 +1351,10 @@ function renderVoicePanel(): void {
   const info = voiceInfo(selected);
   const target = focusedSpec();
   const loadedWav = sampleBank.getLoaded(selected);
+  const drumName = DRUM_LABELS[selected] ?? info.name;
   $("voice-title").innerHTML = loadedWav
-    ? `${info.short} · ${info.name} <span class="src-badge wav">WAV: ${loadedWav.name}</span>`
-    : `${info.short} · ${info.name} <span class="src-badge synth">SYNTH</span>`;
+    ? `${drumName} <small class="vb-code">${info.short}</small> <span class="src-badge wav">WAV: ${loadedWav.name}</span>`
+    : `${drumName} <small class="vb-code">${info.short}</small> <span class="src-badge synth">Synth</span>`;
   for (const v of VOICES) {
     const rowEl = document.querySelector<HTMLElement>(`.row[data-voice="${v.id}"]`);
     if (rowEl) {
@@ -1530,6 +1645,7 @@ function renderStatus(state: AudioState, detail?: string): void {
 function onEngineStatus(status: EngineStatus): void {
   meter.set(status.peak);
   clock.onStatus(status);
+  renderSyncPill();
   if (clock.following) bpmInput.value = status.tempo.toFixed(2);
   if (audio.armed) playBtn.dataset.armed = "true";
   else delete playBtn.dataset.armed;
@@ -1844,6 +1960,7 @@ async function togglePlay(fromExternal = false): Promise<void> {
     }
   }
   if (!fromExternal) clock.notifyTransport(audio.playing);
+  if (audio.playing) dismissFirstRun();
   renderPlayhead();
 }
 
@@ -1905,6 +2022,7 @@ function onSourceChange(source: SourceKind, previous: SourceKind): void {
   } else {
     bpmInput.value = String(spec.bpm);
   }
+  queueMicrotask(renderSyncPill);
 }
 
 const bindUnit = (el: HTMLInputElement, key: string, apply: (v: number) => void) =>
@@ -2257,6 +2375,7 @@ $("share").addEventListener("click", () => {
   if (surfaceMode === "booth") {
     $("share-panel").classList.toggle("open-in-booth");
   }
+  setDrawer("share", true);
   $("share-panel").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   writeUrl();
   void (SINGLE ? copyField(shareCode, "Pattern code") : copyField(shareLink, "Link"));
@@ -3430,3 +3549,5 @@ commit({ markModified: false });
 booting = false;
 renderPlayhead();
 renderStatus("idle");
+renderSyncPill();
+renderFirstRun();

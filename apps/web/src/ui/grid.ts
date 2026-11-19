@@ -12,7 +12,7 @@ import {
   type PatternSpec,
   type StepChar,
 } from "../spec";
-import { VOICES, type VoiceId } from "../voices";
+import { DRUM_LABELS, VOICES, type VoiceId } from "../voices";
 
 export interface GridHandlers {
   onStep(voice: VoiceId, step: number): void;
@@ -83,7 +83,7 @@ export class Grid {
     scaleRow.setAttribute("aria-hidden", "true");
     const scaleHead = document.createElement("div");
     scaleHead.className = "tr-scale-head";
-    scaleHead.innerHTML = `<span class="tr-badge">TR-REC</span><span class="tr-fx-legend" title="Per-Voice FX Sends: EC = Dub Echo · RV = Reverb · FL = Filter/Drive">EC·RV·FL</span>`;
+    scaleHead.innerHTML = `<span class="tr-badge">Drums</span><span class="tr-fx-legend keys-only" title="Solo · Mute · Echo / Reverb / Filter">S·M·FX</span>`;
     scaleRow.append(scaleHead);
     for (let i = 0; i < STEP_COUNT; i++) {
       const cell = document.createElement("div");
@@ -108,7 +108,7 @@ export class Grid {
       const sel = document.createElement("button");
       sel.type = "button";
       sel.className = "voice-btn";
-      sel.textContent = voice.short;
+      sel.innerHTML = `<span class="vb-name">${DRUM_LABELS[voice.id]}</span><small class="vb-code">${voice.short}</small>`;
       sel.dataset.select = voice.id;
       sel.dataset.key = vKey;
       sel.title = `${voice.name} (Key ${vKey} select · Shift+${vKey} play · ⌥+${vKey} mute · Ctrl+${vKey} echo)`;
@@ -157,7 +157,10 @@ export class Grid {
         fxWrap.append(fb);
       }
 
-      head.append(sel, solo, mute, fxWrap);
+      const tools = document.createElement("span");
+      tools.className = "row-tools";
+      tools.append(solo, mute, fxWrap);
+      head.append(sel, tools);
       row.append(head);
       this.selectButtons.push(sel);
       this.soloButtons.push(solo);

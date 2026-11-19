@@ -166,6 +166,7 @@ export class SampleBankController {
 
   async refreshBridgeCatalog(): Promise<void> {
     if (__P5_SINGLE__) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     try {
       const res = await fetch("/samples/index.json", { cache: "no-store" });
       if (!res.ok) return;

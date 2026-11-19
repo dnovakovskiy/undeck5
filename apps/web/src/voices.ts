@@ -40,6 +40,20 @@ export const VOICES: readonly VoiceInfo[] = [
 
 export const VOICE_IDS: readonly VoiceId[] = VOICES.map((v) => v.id);
 
+/** Plain hobbyist names shown on screen (the TR code stays as small grey text). */
+export const DRUM_LABELS: Readonly<Record<VoiceId, string>> = {
+  kick: "Kick",
+  snare: "Snare",
+  low_tom: "Low tom",
+  mid_tom: "Mid tom",
+  high_tom: "High tom",
+  rim: "Rim",
+  clap: "Clap",
+  closed_hat: "Closed hat",
+  open_hat: "Open hat",
+  cowbell: "Cowbell",
+};
+
 export function voiceInfo(id: VoiceId): VoiceInfo {
   return VOICES.find((v) => v.id === id)!;
 }

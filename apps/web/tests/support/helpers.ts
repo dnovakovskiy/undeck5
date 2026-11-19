@@ -88,7 +88,22 @@ export function base64Url(s: string): string {
 }
 
 /** Clicks a clock-source segment by its label. */
+/** UI v2 keeps rarely used panels in drawers. Opens one (idempotent). */
+export async function openDrawer(page: Page, which: "settings" | "clock" | "share" | "feel"): Promise<void> {
+  const map = {
+    settings: ["#settings-drawer", "#settings-btn"],
+    clock: ["#clock", "#sync-pill"],
+    share: ["#share-panel", "#share"],
+    feel: ["#feel-drawer", "#feel-btn"],
+  } as const;
+  const [panel, trigger] = map[which];
+  const open = await page.locator(panel).evaluate((el) => el.classList.contains("open"));
+  if (!open) await page.locator(trigger).click();
+  await expect(page.locator(panel)).toHaveClass(/\bopen\b/);
+}
+
 export async function chooseSource(page: Page, label: "Internal" | "Tap" | "Bridge" | "MIDI"): Promise<void> {
+  await openDrawer(page, "clock");
   await page.locator(".seg label", { hasText: new RegExp(`^${label}$`) }).click();
   await expect(page.locator(`input[name="clock-source"][value="${label.toLowerCase()}"]`)).toBeChecked();
 }

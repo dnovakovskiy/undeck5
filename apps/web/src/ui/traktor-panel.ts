@@ -389,17 +389,17 @@ const STEM_PRIMARY_VOICE: Readonly<Record<TraktorStemId, VoiceId>> = {
 };
 
 const STEM_LABELS: Readonly<Record<TraktorStemId, string>> = {
-  sub: "SUB BASS (LT)",
-  snare: "SNARE / BREAK",
-  hats: "HI-HATS",
-  perc: "CLAP / PERC",
+  sub: "Bass line",
+  snare: "Snare",
+  hats: "Hi-hats",
+  perc: "Claps & percussion",
 };
 
 const BUILDUP_LABELS: Readonly<Record<BuildupMacroId, string>> = {
-  echo_hpf: "ECHO + HPF FILTER",
-  noise_filter: "NOISE + FILTER SWEEP",
-  spiral_roll: "SPIRAL + SNARE ROLL",
-  sub_reverb: "SUB KILL + REVERB",
+  echo_hpf: "Echo riser",
+  noise_filter: "Noise sweep",
+  spiral_roll: "Snare roll",
+  sub_reverb: "Reverb wash",
 };
 
 function buildSpecFromPattern(pat: TraktorPatternDef, kit: TraktorKitDef): PatternSpec {
@@ -966,6 +966,19 @@ export class TraktorPanel {
     // Explicit RELEASE INTO DROP! button
     $("trk-drop-btn").addEventListener("click", () => this.releaseIntoDrop());
 
+    // Genre filter chips (All / Techno / House / Breaks)
+    for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-trk-filter]")) {
+      btn.addEventListener("click", () => {
+        const f = btn.dataset.trkFilter ?? "all";
+        for (const b of this.root.querySelectorAll<HTMLButtonElement>("[data-trk-filter]")) {
+          b.setAttribute("aria-pressed", String(b === btn));
+        }
+        for (const tile of this.root.querySelectorAll<HTMLElement>("[data-trk-pattern]")) {
+          tile.hidden = f !== "all" && tile.dataset.trkGenre !== f;
+        }
+      });
+    }
+
     // Stem tabs (Sub/Kick, Snare/Break, Hats, Clap/Perc)
     for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-trk-stem]")) {
       btn.addEventListener("click", () => {
@@ -993,16 +1006,16 @@ export class TraktorPanel {
     if (fill) fill.style.width = `${this.activeBuildup || this.dropTailMacro ? pct : 0}%`;
     if (status) {
       if (this.activeBuildup) {
-        status.textContent = `${BUILDUP_LABELS[this.activeBuildup]} · ${pct}% — CLICK DROP [R]`;
+        status.textContent = `${BUILDUP_LABELS[this.activeBuildup]} · ${pct}% · let go or press Drop`;
         status.dataset.state = "building";
       } else if (this.dropTailMacro) {
-        status.textContent = `DROPPED ON ACTIVE PATTERN · POST-FILTER TAIL ${pct}%`;
+        status.textContent = `Dropped! Effect fading out · ${pct}%`;
         status.dataset.state = "dropped";
       } else if (performance.now() < this.dropFlashUntil) {
-        status.textContent = "DROPPED ON ACTIVE PATTERN · FULL SUB LIVE";
+        status.textContent = "Dropped! Full groove back";
         status.dataset.state = "dropped";
       } else {
-        status.textContent = "READY · TAP OR HOLD A BUILDUP MACRO";
+        status.textContent = "Hold a buildup, let go on the 1";
         status.dataset.state = "idle";
       }
     }
@@ -1019,9 +1032,9 @@ export class TraktorPanel {
     const kit = this.currentKit();
 
     $("trk-readout").textContent = !this.powered
-      ? "PASSIVE · PRESS \\ TO ACTIVATE"
+      ? "OFF"
       : this.activeBuildup
-        ? `BUILDING · ${BUILDUP_LABELS[this.activeBuildup]}`
+        ? `BUILDING · ${BUILDUP_LABELS[this.activeBuildup].toUpperCase()}`
         : `${kit.name.toUpperCase()} · ${pat.name.toUpperCase()}${this.kickCut ? " · KICK CUT" : ""}`;
 
     const kitSelect = $<HTMLSelectElement>("trk-kit");
@@ -1031,7 +1044,7 @@ export class TraktorPanel {
     $("trk-ducking").setAttribute("aria-pressed", String(this.ducking));
     $("trk-load-sample").textContent = this.customSampleName
       ? `WAV: ${this.customSampleName}`
-      : "+ Load WAV";
+      : "+ Sample";
 
     const vol = $<HTMLInputElement>("trk-volume");
     if (vol.value !== String(this.volume)) vol.value = String(this.volume);
@@ -1064,7 +1077,7 @@ export class TraktorPanel {
     }
 
     const voice = STEM_PRIMARY_VOICE[this.activeStem];
-    $("trk-stem-label").textContent = `${STEM_LABELS[this.activeStem]} · 16 STEPS [O = NEXT STEM]`;
+    $("trk-stem-label").textContent = `${STEM_LABELS[this.activeStem]} · tap to edit`;
     const stepsStr = normalizeSteps(spec.voices[voice].steps);
 
     this.stepButtons.forEach((btn, i) => {

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   app,
+  openDrawer,
   base64Url,
   expectClean,
   expectPhoneLayout,
@@ -190,24 +191,25 @@ test("voice panel shows each voice's controls", async ({ page }) => {
     CB: ["tune", "tone", "decay", "level"],
   };
   for (const [short, controls] of Object.entries(expected)) {
-    await page.locator(".voice-btn", { hasText: new RegExp(`^${short}$`) }).click();
+    await page.locator(".voice-btn", { hasText: new RegExp(`${short}$`) }).click();
     const got = await page.locator("#voice-controls input[data-control]").evaluateAll((els) =>
       els.map((e) => (e as HTMLInputElement).dataset.control),
     );
     expect(got, short).toEqual(controls);
   }
   // A control change lands in the pattern.
-  await page.locator(".voice-btn", { hasText: /^SD$/ }).click();
+  await page.locator('[data-select="snare"]').click();
   await page.locator("#vc-snappy").fill("0.8");
   await expect(page.locator("#vc-snappy-out")).toHaveText("80%");
   await reopen(page);
-  await page.locator(".voice-btn", { hasText: /^SD$/ }).click();
+  await page.locator('[data-select="snare"]').click();
   await expect(page.locator("#vc-snappy")).toHaveValue("0.8");
 });
 
 test("master: gain in dB and limiter round-trip", async ({ page }) => {
   guard(page);
   await page.goto("/");
+  await openDrawer(page, "settings");
   await page.locator("#gain").fill("-6");
   await expect(page.locator("#gain-out")).toHaveText("−6.0 dB");
   await page.locator("#limiter").check();
@@ -227,6 +229,7 @@ test("share and import without dialogs", async ({ page }) => {
   expect(link.endsWith(code)).toBe(true);
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "off");
+  await openDrawer(page, "share");
   await page.locator("#import").fill(link);
   await page.locator("#import").press("Enter");
   await expect(page.locator("#share-msg")).toHaveText("Pattern loaded.");
@@ -316,6 +319,7 @@ test("garbage in the hash or the import field never breaks the page", async ({ p
   await play(page);
   await expectPlayheadAdvances(page, 3);
   // The import field rejects junk without touching the pattern.
+  await openDrawer(page, "share");
   const before = await page.locator("#share-code").inputValue();
   for (const junk of ["   ", "#p=", "p=%%%", "https://example.com/#p=@@@", "x".repeat(5000)]) {
     await page.locator("#import").fill(junk);
@@ -422,7 +426,7 @@ test("MacBook Air keyboard bindings and 3Blue1Brown How-To video explainer (Step
 
   // Select Snare (Digit2), toggle Step 5 (KeyG) to hit, and Shift+Step 13 (KeyB) to flam
   await page.keyboard.press("Digit2");
-  await expect(page.locator("#voice-title")).toHaveText("SD · Snare drum");
+  await expect(page.locator("#voice-title")).toContainText("Snare");
   await page.keyboard.press("KeyG");
   await expect(step(page, "snare", 5)).toHaveAttribute("data-state", "on");
   await page.keyboard.press("Shift+KeyB");
@@ -439,6 +443,7 @@ test("MacBook Air keyboard bindings and 3Blue1Brown How-To video explainer (Step
   const modal = page.locator("#how-to-modal");
   await expect(modal).toBeVisible();
   await expect(modal).toHaveAttribute("data-guide-mode", "sequencer");
+  await page.locator("#howto-more summary").click();
   await expect(page.locator("#howto-qs-seq")).toBeVisible();
   await expect(page.locator("#howto-qs-rmx")).toBeHidden();
   await expect(page.locator("#manim-canvas")).toBeVisible();
@@ -495,6 +500,7 @@ test("Maschine Groove/Humanize/Auto-Fill, Per-Sample & Group FX visual cues/shor
   await expect(snareRow).not.toHaveAttribute("data-fx");
 
   // 5. Ableton Link clock source selection
+  await openDrawer(page, "clock");
   await page.locator(".seg label", { hasText: /^Ableton Link$/ }).click();
   await expect(page.locator("#clock")).toHaveAttribute("data-source", "link");
   await expect(page.locator("#link-url")).toBeVisible();
@@ -520,7 +526,9 @@ test("MacBook Air 13-inch Booth Split fits 1280x800 and 1440x800 above the fold 
   await expect(page.locator("#grid-panel")).toBeVisible();
   await expect(page.locator("#rmx-panel")).toBeVisible();
   await expect(page.locator("#voice-panel")).toBeVisible();
-  await expect(page.locator("#clock")).toBeVisible();
+  // Clock & sync lives behind the sync pill; closed by default.
+  await expect(page.locator("#clock")).toBeHidden();
+  await expect(page.locator("#sync-pill")).toBeVisible();
 
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 800 });
@@ -719,6 +727,7 @@ test("Hardware visual/color schemes switch palettes cleanly and persist across r
   const defaultBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   expect(defaultBg).toBe("rgb(15, 17, 21)");
 
+  await openDrawer(page, "settings");
   const themeSelect = page.locator("#theme-select");
   await expect(themeSelect).toHaveValue("default");
 
@@ -999,10 +1008,12 @@ test("DJS-1000 & RMX-1000 full MacBook Air hotkeys and 5-tab 3Blue1Brown How-To 
   await expect(page.locator("#rmx-scene-amount-out")).toHaveText("0%");
 
   // 3. Clock 'Sync Guide' button opens How-To directly on DJ Sync (CDJ / Ableton Link / MIDI)
+  await openDrawer(page, "clock");
   await page.locator("#clock-sync-help").click();
   const modal = page.locator("#how-to-modal");
   await expect(modal).toBeVisible();
   await expect(modal).toHaveAttribute("data-guide-mode", "sync");
+  await page.locator("#howto-more summary").click();
   await expect(page.locator("#howto-qs-sync")).toBeVisible();
   await expect(page.locator("#howto-caption")).toContainText("Pioneer CDJ Sync");
 
@@ -1050,11 +1061,11 @@ test("Traktor Pro 4+ Pattern Player: heavy sub kits, Breakbeat patterns, Buildup
   await expect.poll(() => peakDb(page), { timeout: 10_000 }).toBeGreaterThan(-35);
   await page.keyboard.press("KeyQ");
   await expect(page.locator("#trk-drop-btn")).toHaveAttribute("data-armed", "true");
-  await expect(page.locator("#trk-buildup-status")).toContainText("ECHO + HPF FILTER");
+  await expect(page.locator("#trk-buildup-status")).toContainText("Echo riser");
 
   await page.keyboard.press("KeyR");
   await expect(page.locator("#trk-drop-btn")).toHaveAttribute("data-armed", "false");
-  await expect(page.locator("#trk-buildup-status")).toContainText("DROPPED ON ACTIVE PATTERN");
+  await expect(page.locator("#trk-buildup-status")).toContainText("Dropped!");
   await page.getByRole("button", { name: "Stop", exact: true }).click();
 
   // Check 390x844 phone layout on Pattern Player
@@ -1103,7 +1114,8 @@ test("Active/Passive machine toggles, hotkey machine switching, and zero cross-m
   await expect(app(page)).toHaveAttribute("data-surface", "traktor");
   await expect(page.locator("#power-traktor")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#kb-target-pill")).toHaveAttribute("data-target", "traktor");
-  await expect(page.locator(".trk-hotkey-strip")).toBeVisible();
+  // Shortcut strips appear only while ⌘ is held or "Always show" is on.
+  await expect(page.locator(".trk-hotkey-strip")).toBeHidden();
 
   // Zero bleed check: pressing KeyR or Control+Digit2 on Pattern Player never touches RMX lever or TR Drums FX
   await page.keyboard.down("KeyR");

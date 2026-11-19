@@ -23,11 +23,11 @@
 
 ## ⚡ How It Works in 10 Seconds (ADHD-Friendly Edition)
 
-1. **Switch between machines by hotkey (`⌥1`–`⌥5` or `` ` ``)** — **Step Sequencer** (`⌥1`), **Pattern Player** *(Traktor Pro 4+ style, `⌥2`)*, **DJS-1000 Pad Deck** (`⌥3`), **RMX-1000 Remix Station** (`⌥4`), or **13" MacBook Booth Split** (`⌥5` / `Shift + ~`).
-2. **Press `Space`** — instant synthesized club drums and heavy sub-bass right out of your laptop, **zero plugins or paid sample packs needed**.
-3. **Toggle any machine `ACTIVE` or `PASSIVE` (`\` or `⌥⇧1`–`⌥⇧4`)** — passive machines stay silent and ignore device hotkeys, and the **`⌨ KEYS → …`** badge shows the **single `ACTIVE` machine** currently driven by your keyboard (zero cross-machine collisions!).
-4. **Cook a techno buildup & drop with one finger** — on **Pattern Player**, tap or hold **`Q`**, **`W`**, **`E`**, or **`T`** (echo + HPF sweep, white-noise jet, snare spiral, or sub-kill reverb), then hit **`R` (`RELEASE INTO DROP!`)** on Beat 1 to slam full sub-bass back onto the groove.
-5. **Glue it to your friends' decks** — plug into the booth Ethernet switch (**Pioneer Pro DJ Link** / **Opus Quad**), hop on Wi-Fi (**Ableton Link**), or use **USB/DIN MIDI** / **Tap Tempo** so your loops stay phase-locked to Decks 1–4.
+1. **Pick a machine at the top (`⌥1`–`⌥5` or `` ` ``)** — **TR Drums** (`⌥1`), **Pattern Player** *(Traktor Pro 4+ style, `⌥2`)*, **DJS-1000** (`⌥3`), **RMX FX** (`⌥4`), or **Split** (`⌥5` / `Shift + ~`).
+2. **Press `Space` (or the orange `Play` button)** — instant synthesized club drums and heavy sub-bass right out of your laptop, **zero plugins or paid sample packs needed**.
+3. **Click the LED dot next to any tab (or press `\` / `⌥⇧1`–`⌥⇧4`) to turn machines on or off** — off machines stay silent and ignore shortcuts. Hold **`⌘`** anytime (or enable it in **`⋯` Settings**) to reveal every keyboard shortcut overlay on screen.
+4. **Cook a techno buildup & drop with one finger** — on **Pattern Player**, hold **`Echo riser`** (`Q`), **`Noise sweep`** (`W`), **`Snare roll`** (`E`), or **`Reverb wash`** (`T`), then hit **`Drop`** (`R`) on Beat 1 to slam full sub-bass back onto the groove.
+5. **Glue it to your friends' decks** — click the **`Internal clock`** sync pill at the top to open **Clock & sync** for **Pioneer Pro DJ Link** / **Opus Quad**, **Ableton Link**, **USB/DIN MIDI**, or **Tap Tempo**. Press **`?`** anytime for the 30-second Quick guide.
 
 ---
 
@@ -41,11 +41,11 @@ Every surface shares **one sample-accurate clock and Rust/Wasm audio engine**, s
 
 ### 1. Pattern Player *(Traktor Pro 4+ Style Heavy-Bass Layer Deck)*
 
-Minimalist club layer deck built to ride underneath or on top of a playing DJ track. Every shortcut is printed right on its on-screen key strip and pad corners: punch **`1`–`0`, `-`, `=`** for **12 pre-baked Techno Sub, House, and Breakbeat patterns**, toggle **`KICK CUT` (`.`)** or **`DUCKING` (`U`)** so you never clash with the mixer's kick, and fire **`BUILDUP → DROP FX`** (`Q / W / E / T` → `R`) during breakdowns.
+Minimalist club layer deck built to ride underneath or on top of a playing DJ track. Filter by **All / Techno / House / Breaks**, tap any of the **12 patterns** (`1`–`0`, `-`, `=`), toggle **`Kick off` (`.`)** or **`Duck` (`U`)** so you never clash with the mixer's kick, and hold any of the 4 **Buildup** buttons (`Echo riser`, `Noise sweep`, `Snare roll`, `Reverb wash` → `Drop`) during breakdowns. Hold **`⌘`** to see every keyboard shortcut on the pads.
 
-![Pattern Player — Traktor Pro 4+ style layer deck with on-screen hotkey strip, heavy sub-bass kits, UK Sub Breakbeat pattern, and Echo + HPF Filter buildup armed for the drop](docs/assets/screen-pattern-player.png)
+![Pattern Player — Traktor Pro 4+ style layer deck with genre filter chips, heavy sub-bass kits, UK Sub Breakbeat pattern, and Echo riser buildup armed for the drop](docs/assets/screen-pattern-player.png)
 
-- **7 Heavy-Bass Synthesized Kits + Offline WAV Loader:** Ships with `Berlin Sub Rumble`, `Hard Industrial Sub`, `Peak-Time Acid Sub`, `UK Sub & Breakbeat`, `Minimal Sub-Click`, `Chicago Sub-Jack`, and `Top + Sub Layer (No Kick)` — plus **`+ Load WAV`** to drop local `.wav`/`.mp3`/`.ogg` one-shots from your laptop *(commercial artist kits inside Traktor Pro 4 are proprietary bundled assets, so `player5` synthesizes club-weight sub kits natively and supports offline local samples)*.
+- **7 Heavy-Bass Synthesized Kits + Offline WAV Loader:** Ships with `Berlin Sub Rumble`, `Hard Industrial Sub`, `Peak-Time Acid Sub`, `UK Sub & Breakbeat`, `Minimal Sub-Click`, `Chicago Sub-Jack`, and `Top + Sub Layer (No Kick)` — plus **`+ Sample`** to drop local `.wav`/`.mp3`/`.ogg` one-shots from your laptop *(commercial artist kits inside Traktor Pro 4 are proprietary bundled assets, so `player5` synthesizes club-weight sub kits natively and supports offline local samples)*.
 
 ---
 
@@ -66,11 +66,11 @@ Pair **TR Grid**, **Pattern Player**, or **DJS-1000** on the left with **Pioneer
 
 ---
 
-### 3. Interactive 3Blue1Brown Visual Manual & DJ Sync Guide (`?`)
+### 3. 30-Second Quick Guide & Full Animated Visual Manual (`?`)
 
-Press **`?`** (or click **`How to · ?`** / **`Sync Guide · ?`**) anytime for **un-rushed 3Blue1Brown-style animated visual chapters**, step-by-step operating procedures, and an interactive MacBook Air keyboard tester.
+Press **`?`** anytime for a **3-step 30-second Quick guide** tailored to whichever machine you're on, with an expandable **Keyboard map** and the full **3Blue1Brown-style animated manual** tucked neatly underneath so beginners aren't hit with a wall of text.
 
-![Interactive 3Blue1Brown Visual Manual showing Pioneer CDJ Pro DJ Link Ethernet topology and step-by-step DJ Sync procedures](docs/assets/screen-howto-sync.png)
+![30-second Quick guide showing the Sync section with expandable keyboard map and full animated manual](docs/assets/screen-howto-sync.png)
 
 ---
 
@@ -113,7 +113,7 @@ Open **`http://localhost:5173`**, hit **`Space`**, and start annoying your B2B f
 Out of the box, `player5` synthesizes every drum in pure Rust math (`[SYNTH]`) so the repo stays lightweight and 100% free of copyrighted audio. Want real studio punch from libraries you **already own on your laptop** (like **NI Maschine 2 Factory**, **Deep Matter**, **Expansions**, or any personal `.wav` pack)?
 
 1. **Zero-Setup Browser Picker (Works Everywhere):**
-   - Click **`NI / WAV Kits`** in the top toolbar → **`+ Load NI / WAV Folder`** → point it at e.g. `/Users/Shared/Deep Matter Library/Samples/Drums` or `/Users/Shared/Maschine 2 Factory Library Library/Samples/Drums`.
+   - Click **`My sounds`** in the top toolbar → **`+ Load NI / WAV Folder`** → point it at e.g. `/Users/Shared/Deep Matter Library/Samples/Drums` or `/Users/Shared/Maschine 2 Factory Library Library/Samples/Drums`.
    - `player5` auto-maps **Kick, Snare, Clap, Closed/Open Hat, Rim, Toms & Cowbell** straight into the AudioWorklet sampler (`Auto-Fill Kit`), and every plugged-in voice gets an emerald **`[WAV]`** badge + sample name so you never confuse NI samples with built-in `[SYNTH]`.
 2. **Automatic Local Mount via `player5-bridge`:**
    - Start `player5-bridge` (or pass `--samples-dir "/path/to/your/drums"`). On macOS it automatically discovers NI sample libraries in `/Users/Shared` and serves them locally at `http://localhost:17505` with zero copying into the repo.

@@ -1,0 +1,847 @@
+/* ==========================================================================
+   player5 UI v2 — "hobbyist first".
+   Loaded after style.css. Goal: fewer words, fewer visible controls,
+   shortcuts on demand (hold ⌘ or Settings → Always show), drawers for
+   anything that is not used every bar.
+   ========================================================================== */
+
+:root {
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 14px;
+  font-family: var(--sans);
+}
+
+#app:not([data-surface="booth"]) {
+  max-width: 1280px;
+}
+
+.top {
+  position: relative;
+}
+.sr-only {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+/* Engine failures must stay visible. */
+.top-status:has(.status[data-state="failed"]) {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  clip: auto !important;
+  overflow: visible !important;
+  flex-basis: 100%;
+}
+
+#bpm,
+output,
+.mono-out,
+.trk-readout,
+.rmx-readout,
+.djs-readout {
+  font-family: var(--mono);
+}
+
+/* ---- typography ---- */
+
+h2 {
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+}
+.label,
+.knob-label {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.panel {
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* ---- header ---- */
+
+.top {
+  gap: 10px 14px;
+  justify-content: flex-start;
+}
+.logo {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.mode-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  overflow: visible;
+  background-color: var(--field);
+  border: 1px solid var(--line);
+}
+.mtab {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9px;
+}
+.mtab:has(.mode-tab[aria-pressed="true"]) {
+  background-color: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.mode-tabs .mtab-power {
+  min-height: 36px;
+  min-width: 22px;
+  padding: 0 4px 0 9px;
+  border: 0;
+  background: transparent !important;
+  opacity: 1;
+}
+.mode-tabs .mtab-power .mach-led {
+  width: 9px;
+  height: 9px;
+}
+.mode-tabs .mtab-power[aria-pressed="false"] .mach-led {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1.5px #5a6276;
+}
+.mode-tabs .mode-tab {
+  border: 0;
+  border-radius: 9px;
+  min-height: 36px;
+  padding: 6px 10px 6px 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  background: transparent;
+  color: var(--muted);
+}
+.mode-tabs .mode-tab:hover {
+  color: var(--text);
+}
+.mode-tabs .mode-tab[aria-pressed="true"] {
+  background: transparent;
+  color: var(--text);
+}
+.mode-tabs .mode-tab-booth {
+  padding: 6px 12px;
+  margin-left: 4px;
+  border-left: 1px solid var(--line);
+  border-radius: 0 9px 9px 0;
+}
+.mode-tabs .mode-tab-booth[aria-pressed="true"] {
+  background-color: var(--panel-2);
+  border-radius: 9px;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.top-meter {
+  width: 48px;
+  height: 8px;
+  min-height: 0;
+  border-radius: 4px;
+}
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted);
+  background-color: var(--field);
+}
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #5a6276;
+  flex-shrink: 0;
+}
+.sync-pill[data-lock="locked"] .sync-dot {
+  background-color: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+.sync-pill[data-lock="searching"] .sync-dot {
+  background-color: var(--warn);
+}
+.sync-pill[aria-expanded="true"] {
+  border-color: var(--head);
+  color: var(--text);
+}
+.top .bpm {
+  display: block;
+}
+.top .bpm-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.top .bpm-label {
+  display: none;
+}
+.top #bpm {
+  width: 70px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  min-height: 38px;
+}
+.top .bpm .sq,
+.top .tap {
+  min-height: 38px;
+  min-width: 30px;
+  padding: 4px 7px;
+}
+.top .play {
+  min-width: 84px;
+  min-height: 42px;
+  border-radius: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 16px;
+}
+.icon-btn {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.top .install {
+  min-height: 38px;
+}
+
+/* ---- drawers ---- */
+
+/* .booth-deck is display: contents, so its panels are #app grid items
+   with order 0. Everything above the machine gets a negative order. */
+#app > .skip {
+  order: -10;
+}
+#app > .top {
+  order: -6;
+}
+#app > #settings-drawer {
+  order: -5;
+}
+#app > #clock {
+  order: -4;
+}
+#app > #share-panel {
+  order: -3;
+}
+#app > .devbar {
+  order: -2;
+}
+.drawer:not(.open) {
+  display: none !important;
+}
+.drawer.open {
+  border-color: var(--line-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.drawer-grid > section {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.drawer h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.drawer .switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- dev bar (pattern tools) ---- */
+
+.panel.devbar {
+  display: block;
+  padding: 10px 14px;
+}
+.devbar .tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.devbar-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-right: 6px;
+}
+.tools-spacer {
+  flex: 1;
+}
+.tools [hidden] {
+  display: none !important;
+}
+.devbar select {
+  min-height: 38px;
+}
+.devbar button {
+  min-height: 38px;
+  padding: 6px 12px;
+}
+.devbar .session-actions {
+  margin-left: 0;
+}
+.feel.drawer-inline {
+  display: none;
+}
+.feel.drawer-inline.open {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 220px));
+  gap: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* Duplicate machine titles: the tab + dev bar already say where you are. */
+#app:not([data-surface="booth"]) :is(#grid-title, #trk-title, #djs-title, #rmx-title) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- power ---- */
+
+.panel-power-btn[aria-pressed="true"] {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+.panel-power-btn[aria-pressed="false"] {
+  opacity: 1;
+  background-color: rgba(255, 204, 77, 0.14);
+  border-color: var(--warn);
+  color: var(--warn);
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+/* ---- shortcuts only on demand ---- */
+
+#app:not([data-show-keys="true"]) :is(
+    .voice-btn,
+    .djs-pad,
+    .rmx-pad-btn,
+    .rmx-fx-btn,
+    .rmx-strip button,
+    .djs-touch-strip button,
+    .trk-pat-btn,
+    .trk-build-btn,
+    .trk-drop-btn,
+    .trk-step
+  )::after {
+  content: none;
+}
+#app:not([data-show-keys="true"]) .row.selected .step::before {
+  content: none;
+}
+#app:not([data-show-keys="true"]) :is(.tr-step-key, .keys-only, .tr-fx-legend),
+#app:not([data-show-keys="true"]) .trk-hotkey-strip,
+#app:not([data-show-keys="true"]) #kb-target-pill {
+  display: none !important;
+}
+#app[data-show-keys="true"] :is(#tap, #fill-hold, .tr-perf-actions button, .vfx-chips button, .mode-tab)[data-key]::after {
+  content: attr(data-key);
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ---- TR rows ---- */
+
+@media (min-width: 761px) {
+  .grid {
+    --head-w: 220px;
+  }
+}
+@media (max-width: 760px) {
+  .row-tools {
+    position: static;
+    flex-direction: column;
+    background: none;
+  }
+  .row-tools :is(.solo, .mute, .fx-led) {
+    opacity: 1;
+  }
+  .vb-name {
+    display: none;
+  }
+  .voice-btn {
+    justify-content: center;
+  }
+  .vb-code {
+    font-size: 11px;
+    font-weight: 700;
+    color: inherit;
+  }
+}
+#grid-hint {
+  display: none;
+}
+#app:not([data-surface="booth"]) .grid-panel > .panel-head {
+  display: none;
+}
+@media (min-width: 761px) {
+  #app:not([data-surface="booth"]) .step {
+    height: 38px;
+  }
+}
+.split {
+  grid-template-columns: minmax(0, 1fr);
+}
+.voice-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 8px;
+  text-align: left;
+  letter-spacing: 0;
+}
+.vb-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vb-code {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.voice-btn[aria-pressed="true"] .vb-code {
+  color: var(--ink);
+}
+#voice-title .vb-code {
+  margin-left: 4px;
+}
+/* Solo / mute / FX float over the right end of the drum name and only
+   show on hover, on the selected row, or while one of them is on. They
+   keep their size (opacity, not display) so they stay clickable. */
+.row-tools {
+  display: flex;
+  gap: 2px;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+.row-tools :is(.solo, .mute) {
+  width: 22px;
+  min-width: 22px;
+}
+.row-tools .fx-led {
+  min-width: 19px;
+  padding: 2px 1px;
+}
+.row-tools :is(.solo, .mute, .fx-led) {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.row.selected .row-tools :is(.solo, .mute, .fx-led) {
+  opacity: 0.55;
+}
+.row:hover .row-tools :is(.solo, .mute, .fx-led),
+.row:focus-within .row-tools :is(.solo, .mute, .fx-led),
+.row-tools :is(.solo, .mute, .fx-led)[aria-pressed="true"] {
+  opacity: 1;
+}
+@media (hover: none) {
+  .row-tools :is(.solo, .mute, .fx-led) {
+    opacity: 1;
+  }
+}
+
+/* ---- calmer colour ---- */
+
+input[type="range"] {
+  accent-color: var(--head);
+}
+.toggle[aria-pressed="true"] {
+  background-color: rgba(255, 122, 26, 0.16);
+  color: var(--text);
+  border-color: var(--accent);
+}
+.top .play,
+.top .play[aria-pressed="false"] {
+  background-color: var(--accent);
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.top .play[aria-pressed="true"] {
+  background-color: #2b303c;
+  color: var(--text);
+}
+
+/* ---- Pattern Player (outside Split) ---- */
+
+#app:not([data-surface="booth"]) .traktor-panel:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-areas:
+    "head head"
+    "keys keys"
+    "sound sound"
+    "pats build"
+    "steps build";
+  gap: 14px 18px;
+  align-items: start;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-head {
+  grid-area: head;
+  margin-bottom: 0;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-hotkey-strip {
+  grid-area: keys;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-controls-bar {
+  grid-area: sound;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-patterns-section {
+  grid-area: pats;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-buildup-box {
+  grid-area: build;
+}
+#app:not([data-surface="booth"]) .traktor-panel > .trk-seq-footer {
+  grid-area: steps;
+}
+#app:not([data-surface="booth"]) .trk-pat-btn {
+  min-height: 72px;
+}
+#app:not([data-surface="booth"]) .trk-buildup-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+#app:not([data-surface="booth"]) .trk-buildup-row .trk-build-btn,
+#app:not([data-surface="booth"]) .trk-buildup-row .trk-drop-btn {
+  min-height: 64px;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#app:not([data-surface="booth"]) .trk-pat-name {
+  font-size: 15px;
+}
+#app:not([data-surface="booth"]) .trk-buildup-row .trk-drop-btn {
+  grid-column: 1 / -1;
+  min-height: 56px;
+}
+.trk-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.trk-genre-filter {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.trk-genre-filter button {
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 2px 12px;
+}
+[data-trk-pattern][hidden] {
+  display: none !important;
+}
+
+/* ---- quick guide ---- */
+
+.howto-quick {
+  display: none;
+}
+#how-to-modal[data-guide-mode="sequencer"] .howto-quick[data-mode="sequencer"],
+#how-to-modal[data-guide-mode="traktor"] .howto-quick[data-mode="traktor"],
+#how-to-modal[data-guide-mode="djs"] .howto-quick[data-mode="djs"],
+#how-to-modal[data-guide-mode="rmx"] .howto-quick[data-mode="rmx"],
+#how-to-modal[data-guide-mode="sync"] .howto-quick[data-mode="sync"] {
+  display: block;
+}
+.howto-quick-wrap {
+  margin: 8px 0 20px;
+}
+.howto-quick h3 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.hq-lead {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.hq-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.hq-step {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 16px;
+  border-radius: 12px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line);
+}
+.hq-step b {
+  font-size: 15px;
+}
+.hq-step p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hq-num {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: var(--ink);
+  font-weight: 700;
+}
+.howto-more + .howto-more {
+  margin-top: 0;
+}
+.howto-more {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.howto-more > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 0;
+}
+.howto-more > summary:hover {
+  color: var(--text);
+}
+
+/* ---- first-run tip ---- */
+
+.first-run-hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(680px, calc(100vw - 32px));
+  padding: 10px 10px 10px 16px;
+  border-radius: 999px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  color: var(--text);
+  pointer-events: none;
+}
+.first-run-hint[hidden] {
+  display: none;
+}
+.first-run-hint button {
+  pointer-events: auto;
+  min-height: 30px;
+  border-radius: 999px;
+}
+.first-run-hint kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+}
+
+/* ---- phone ---- */
+
+@media (max-width: 720px) {
+  .drawer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .top-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .mode-tabs {
+    width: 100%;
+  }
+  .mode-tabs .mode-tab {
+    font-size: 13px;
+    padding: 6px 8px 6px 4px;
+  }
+  .top .play {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .top .bpm {
+    flex: 1 1 100%;
+    order: 2;
+  }
+  .top .top-meter {
+    order: 3;
+  }
+  .top .sync-pill {
+    order: 3;
+  }
+  .top .play,
+  .top .icon-btn {
+    order: 4;
+  }
+  .first-run-hint {
+    border-radius: 14px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+  }
+  .row-tools .mute {
+    display: block;
+    width: auto;
+  }
+  .sync-pill {
+    max-width: 150px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .hq-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .feel.drawer-inline.open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #app:not([data-surface="booth"]) .traktor-panel:not([hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "keys" "sound" "pats" "build" "steps";
+  }
+}
+
+/* ---- Split (booth) keeps everything compact ---- */
+
+#app[data-surface="booth"] .top {
+  gap: 6px 10px;
+}
+#app[data-surface="booth"] .mode-tabs .mode-tab,
+#app[data-surface="booth"] .mode-tabs .mtab-power {
+  min-height: 30px;
+  font-size: 12px;
+}
+#app[data-surface="booth"] .top .play {
+  min-height: 34px;
+  min-width: 80px;
+}
+#app[data-surface="booth"] .icon-btn,
+#app[data-surface="booth"] .sync-pill,
+#app[data-surface="booth"] .top #bpm,
+#app[data-surface="booth"] .top .bpm .sq,
+#app[data-surface="booth"] .top .tap {
+  min-height: 32px;
+}
+#app[data-surface="booth"] .icon-btn {
+  width: 34px;
+  min-width: 34px;
+}
+#app[data-surface="booth"] .panel.devbar {
+  padding: 6px 10px;
+}
+#app[data-surface="booth"] .devbar button,
+#app[data-surface="booth"] .devbar select {
+  min-height: 30px;
+  padding: 2px 10px;
+}
+#app[data-surface="booth"] .devbar-title {
+  font-size: 14px;
+}
+
+/* ---- DJS / RMX: sentence case, calmer weight ---- */
+
+:is(.rmx-panel, .djs-panel) :is(button, .label, h3, h4, .rmx-box-head, .rmx-box-head *, .djs-mode-tab) {
+  text-transform: none;
+  letter-spacing: 0;
+}
+:is(.rmx-panel, .djs-panel) button {
+  font-weight: 600;
+}
+
+/* Later than the base rules so they win. */
+@media (max-width: 760px) {
+  .row-tools {
+    flex-direction: column;
+  }
+  .row-tools :is(.solo, .mute, .fx-led) {
+    opacity: 1;
+  }
+}
+/* Split: the deck is half a laptop wide, so keep the name and S / M,
+   drop the code and the per-drum FX LEDs (Effects strip still shows them). */
+#app[data-surface="booth"] .vb-code,
+#app[data-surface="booth"] .row-tools .row-fx {
+  display: none;
+}
+#app[data-surface="booth"] .vb-name {
+  font-size: 12px;
+}
+.top-status.sr-only {
+  display: block;
+}

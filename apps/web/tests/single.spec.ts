@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { expectClean, expectPhoneLayout, expectPlayheadAdvances, guard, peakDb, play, step } from "./support/helpers";
+import { expectClean, expectPhoneLayout, expectPlayheadAdvances, guard, openDrawer, peakDb, play, step } from "./support/helpers";
 
 test.afterEach(({ page }) => expectClean(page));
 
@@ -94,6 +94,7 @@ test("paints its own dark theme; phone width keeps a 16 px gutter", async ({ pag
 test("Bridge and MIDI are hidden with a hint", async ({ page }) => {
   guard(page);
   await loadWithCsp(page);
+  await openDrawer(page, "clock");
   await expect(page.locator(".seg label", { hasText: /^Bridge$/ })).toBeHidden();
   await expect(page.locator(".seg label", { hasText: /^MIDI$/ })).toBeHidden();
   await expect(page.locator(".seg label", { hasText: /^Tap$/ })).toBeVisible();

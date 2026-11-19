@@ -6,7 +6,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { base64Url, expectClean, guard, peakDb, play, step, VOICE_IDS } from "./support/helpers";
+import { base64Url, expectClean, guard, openDrawer, peakDb, play, step, VOICE_IDS } from "./support/helpers";
 
 test.afterEach(({ page }) => expectClean(page));
 
@@ -113,6 +113,7 @@ test("artifact fragment: every voice on its own reaches the meter", async ({ pag
   test.setTimeout(90_000);
   const errors = guard(page);
   await page.setContent(wrapped(), { waitUntil: "load" });
+  await openDrawer(page, "share");
   const levels: Record<string, number> = {};
   for (const voice of VOICE_IDS) {
     const code = base64Url(JSON.stringify({ bpm: 140, voices: { [voice]: { steps: "X-x-X-x-X-x-X-x-" } } }));
