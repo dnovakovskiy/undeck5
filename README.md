@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/assets/logo.svg" alt="undeck5: Local Prototype · 3 Friends: 2x B2B DJs + 1x Laptop Drum Machine" width="560" />
   <br /><br />
-  <img src="docs/assets/hero-retrowave-b2b.jpg" alt="View from behind the booth in a Berlin underground warehouse techno club: two DJs mixing B2B across 4 decks while the 3rd friend stands beside them on stage playing a wired laptop drum machine in front of a locked-in crowd" width="100%" />
+  <img src="docs/assets/hero-inzhyr-cosmic.jpg" alt="Psychedelic cosmic illustration of three friends at a club DJ booth: two mixing B2B on CDJs and a club mixer while the third friend beside them jams on a glowing laptop drum machine wired into the decks, framed by a swirling nebula vortex and glowing concentric halo rings" width="100%" />
 
   <h3>
     Berlin booth. Four CDJs. Two friends intensely pretending to tweak the EQs B2B.<br />
