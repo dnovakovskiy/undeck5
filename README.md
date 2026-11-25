@@ -11,7 +11,7 @@
     Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Player #5</strong> — casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
   </p>
   <p>
-    🎬 <a href="docs/assets/player5-overview.mp4"><strong>Watch the 18-Second Live Audio + Video Overview (<code>docs/assets/player5-overview.mp4</code>)</strong></a>
+    🎬 <a href="https://github.com/dnovakovskiy/player5/releases/download/v0.2.0/player5-overview.mp4"><strong>Watch / Download the 18-Second Live Audio + Video Overview (MP4, 4.4 MB)</strong></a>
   </p>
 </div>
 
