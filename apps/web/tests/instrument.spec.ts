@@ -236,7 +236,7 @@ test("share and import without dialogs", async ({ page }) => {
   await expect(step(page, "kick", 1)).toHaveAttribute("data-state", "accent");
   await page.locator("#import").fill("not a code!");
   await page.getByRole("button", { name: "Load" }).click();
-  await expect(page.locator("#share-msg")).toContainText("not a player5 pattern");
+  await expect(page.locator("#share-msg")).toContainText("not an undeck5 pattern");
   expect(errors).toEqual([]);
 });
 
@@ -324,7 +324,7 @@ test("garbage in the hash or the import field never breaks the page", async ({ p
   for (const junk of ["   ", "#p=", "p=%%%", "https://example.com/#p=@@@", "x".repeat(5000)]) {
     await page.locator("#import").fill(junk);
     await page.locator("#import").press("Enter");
-    await expect(page.locator("#share-msg")).toContainText("not a player5 pattern");
+    await expect(page.locator("#share-msg")).toContainText("not an undeck5 pattern");
     await expect(page.locator("#share-code")).toHaveValue(before);
   }
   expect(errors).toEqual([]);

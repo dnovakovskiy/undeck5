@@ -1,6 +1,6 @@
 {
-  "name": "player5",
-  "short_name": "player5",
+  "name": "undeck5",
+  "short_name": "undeck5",
   "description": "TR-inspired drum machine for the DJ booth.",
   "start_url": "./",
   "scope": "./",

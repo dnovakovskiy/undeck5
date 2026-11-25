@@ -14,7 +14,7 @@
 
 const VERSION = "__P5_VERSION__";
 const PRECACHE = __P5_PRECACHE__;
-const CACHE = "player5-" + VERSION;
+const CACHE = "undeck5-" + VERSION;
 const SHELL = "./";
 
 self.addEventListener("install", (event) => {
@@ -31,7 +31,7 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k.startsWith("player5-") && k !== CACHE).map((k) => caches.delete(k))),
+        Promise.all(keys.filter((k) => k.startsWith("undeck5-") && k !== CACHE).map((k) => caches.delete(k))),
       )
       .then(() => self.clients.claim()),
   );

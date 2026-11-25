@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0 — Hobbyist-Friendly UI v2 & Local NI / WAV Sampler
+## v0.2.0 — Renamed to `undeck5`, Hobbyist-Friendly UI v2 & Local NI / WAV Sampler
 
 > **Status:** Local prototype — now dramatically cleaner for hobbyist DJs, with your own Native Instruments / `.wav` drum samples plugged straight into the AudioWorklet engine.
 
@@ -22,7 +22,7 @@
 
 ## v0.1.0 — First Local Prototype Release
 
-> **Status:** Early local prototype running in your browser, offline single-file HTML (`player5.html`), and local Rust sync bridge (`player5-bridge`). Built on a deterministic Rust DSP + Sequencer core (`core/`) as the foundation for an eventual native booth app.
+> **Status:** Early local prototype running in your browser, offline single-file HTML (`undeck5.html`), and local Rust sync bridge (`player5-bridge`). Built on a deterministic Rust DSP + Sequencer core (`core/`) as the foundation for an eventual native booth app.
 
 ### 4 Performance Surfaces on One Clock
 - **Step Sequencer (`⌥1`):** Classic `10×16` drum grid with 64-step `A–D` bar chains, 7 analog-inspired drum circuits (`TR-8O8`, `TR-9O9`, `TR-7O7`, `TR-6O6`, `TR-72x`, `CR-78`), Breakbeat presets, Groove/Humanize/Auto-Fill, Per-Sample & Group FX, and `Hold R` momentary fill.

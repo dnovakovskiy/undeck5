@@ -39,7 +39,7 @@ test("artifact: one file that cannot reach the network", () => {
   expect(text).not.toMatch(/<link[^>]+href=/);
   expect(text).not.toContain("serviceWorker");
   expect(text).not.toContain("manifest");
-  const title = text.indexOf("<title>player5</title>");
+  const title = text.indexOf("<title>undeck5</title>");
   expect(title).toBeGreaterThan(0);
   expect(title).toBeLessThan(8192);
   expect(text).toMatch(/:root\{[^}]*color-scheme:dark/);

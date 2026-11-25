@@ -106,7 +106,7 @@ export function template(o: TemplateOptions): string {
   return `
   <a class="skip" href="#grid">Skip to the pattern</a>
   <header class="top">
-    <h1 class="logo">player<span>5</span></h1>
+    <h1 class="logo">undeck<span>5</span></h1>
     <nav class="mode-tabs" role="group" aria-label="Machines">
       <div class="mtab" data-mach="tr">
         <button id="power-tr" type="button" class="mach-btn mach-tr mtab-power" aria-pressed="true" aria-label="TR Drums on or off" title="Turn TR Drums on / off"><i class="mach-led" aria-hidden="true"></i><em id="power-tr-state" class="mach-state sr-only">ACTIVE</em></button>

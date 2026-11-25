@@ -62,7 +62,7 @@ for (const [width, height] of [
     const errors = guard(page);
     const requests = recordRequests(page);
     await page.setContent(wrapped(), { waitUntil: "load" });
-    await expect(page).toHaveTitle("player5");
+    await expect(page).toHaveTitle("undeck5");
     await expect(page.locator("#status")).toHaveText(/press Play/);
     await noHorizontalScroll(page, width);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, `artifact-${width}.png`), fullPage: true });

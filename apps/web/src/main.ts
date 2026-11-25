@@ -2270,7 +2270,7 @@ function saveSession(): void {
   }, 2200);
   writeUrl();
   renderSessionButtons();
-  say("Saved startup session — this setup will reload next time you open player5.");
+  say("Saved startup session — this setup will reload next time you open undeck5.");
 }
 
 function resetAllMachines(): void {
@@ -2390,7 +2390,7 @@ for (const field of [shareLink, shareCode]) field.addEventListener("focus", () =
 function importText(text: string): boolean {
   const next = parsePatternInput(text);
   if (!next) {
-    say("That is not a player5 pattern code or link.");
+    say("That is not an undeck5 pattern code or link.");
     return false;
   }
   checkpoint();

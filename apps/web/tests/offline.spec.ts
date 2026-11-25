@@ -11,8 +11,8 @@ test("service worker: works offline after the first visit", async ({ page, conte
     await navigator.serviceWorker.ready;
   });
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15_000 });
-  const cacheName = await page.evaluate(async () => (await caches.keys()).find((k) => k.startsWith("player5-")));
-  expect(cacheName).toMatch(/^player5-[0-9a-f]{16}$/);
+  const cacheName = await page.evaluate(async () => (await caches.keys()).find((k) => k.startsWith("undeck5-")));
+  expect(cacheName).toMatch(/^undeck5-[0-9a-f]{16}$/);
   const cached = await page.evaluate(async (name) => {
     const cache = await caches.open(name!);
     return (await cache.keys()).map((r) => new URL(r.url).pathname);
@@ -50,12 +50,12 @@ test("service worker: a new deploy wins, other pages never replace the shell", a
   const root = (url: URL) => url.pathname === "/";
   await context.route(root, async (route) => {
     const res = await route.fetch();
-    const body = (await res.text()).replace("<title>player5</title>", "<title>player5 next</title>");
+    const body = (await res.text()).replace("<title>undeck5</title>", "<title>undeck5 next</title>");
     await route.fulfill({ response: res, body });
   });
   const next = await page.reload();
   expect(next?.fromServiceWorker()).toBe(true);
-  await expect(page).toHaveTitle("player5 next");
+  await expect(page).toHaveTitle("undeck5 next");
   await context.unroute(root);
 
   // Another page in the worker's scope (pages.yml publishes
@@ -70,7 +70,7 @@ test("service worker: a new deploy wins, other pages never replace the shell", a
   try {
     // The offline shell is the newest index.html the network served.
     await page.goto("/#p=" + "eyJicG0iOjEyNn0");
-    await expect(page).toHaveTitle("player5 next");
+    await expect(page).toHaveTitle("undeck5 next");
     await expect(page.locator("#bpm")).toHaveValue("126");
     await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   } finally {
@@ -80,7 +80,7 @@ test("service worker: a new deploy wins, other pages never replace the shell", a
 
 test("manifest and icons are served", async ({ request }) => {
   const manifest = await (await request.get("/manifest.webmanifest")).json();
-  expect(manifest.name).toBe("player5");
+  expect(manifest.name).toBe("undeck5");
   const sizes = manifest.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes}:${i.purpose}`);
   expect(sizes).toEqual(expect.arrayContaining(["192x192:any", "512x512:any", "512x512:maskable"]));
   for (const icon of manifest.icons as { src: string; type: string }[]) {

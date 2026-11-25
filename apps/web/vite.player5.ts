@@ -180,7 +180,7 @@ export function player5(options: { single: boolean }): Plugin[] {
         for (const bad of FORBIDDEN_IN_SINGLE) {
           if (out.includes(bad)) this.error(`single-file output contains "${bad}"`);
         }
-        const titleAt = out.indexOf("<title>player5</title>");
+        const titleAt = out.indexOf("<title>undeck5</title>");
         if (titleAt < 0 || titleAt > 8192) this.error("<title> must be within the first 8 KB");
         this.emitFile({ type: "asset", fileName: "player5.html", source: out });
       },

@@ -2380,7 +2380,7 @@ export class HowToExplainer {
       { x: 28, y: 84, w: 148, h: 112, title: "CDJ / DJM RIG", l1: "CDJ-2000NXS2/3000", l2: "Tempo Master Deck", l3: "Beat 1..4 + Pitch", col: C_BLUE },
       { x: 204, y: 84, w: 136, h: 112, title: "LAN SWITCH", l1: "Cat5e/Cat6 Cable", l2: "UDP 50000–50002", l3: "Broadcast Beats", col: C_TEAL },
       { x: 368, y: 84, w: 152, h: 112, title: "player5-bridge", l1: "--source prolink", l2: "(or --source opus)", l3: "ws://127.0.0.1:17505", col: C_YELLOW },
-      { x: 548, y: 84, w: 144, h: 112, title: "player5 APP", l1: "Clock → Bridge", l2: "Follow: Master", l3: "Sample-Accurate", col: C_GREEN },
+      { x: 548, y: 84, w: 144, h: 112, title: "undeck5 APP", l1: "Clock → Bridge", l2: "Follow: Master", l3: "Sample-Accurate", col: C_GREEN },
     ];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -2493,7 +2493,7 @@ export class HowToExplainer {
       { x: 36, y: 74, name: "Ableton Live", sub: "UDP 20808 Peer", col: C_BLUE },
       { x: 36, y: 196, name: "Traktor / Serato", sub: "Wi-Fi Link On", col: C_PURPLE },
       { x: 516, y: 74, name: "Rekordbox / DJay", sub: "Link Enabled", col: C_YELLOW },
-      { x: 516, y: 196, name: "player5 Tabs", sub: "Zero-Setup Mesh", col: C_GREEN },
+      { x: 516, y: 196, name: "undeck5 Tabs", sub: "Zero-Setup Mesh", col: C_GREEN },
     ];
 
     for (const p of peers) {
@@ -2655,8 +2655,8 @@ export class HowToExplainer {
     ctx.fillStyle = align > 0.9 ? C_GREEN : C_YELLOW;
     ctx.fillText(
       align > 0.9
-        ? "player5 OUTPUT AFTER LATENCY OFFSET + PHASE NUDGE (Δt = 0.0 ms · TIGHT!)"
-        : `player5 SPEAKER OUTPUT BEFORE CALIBRATION (+${Math.round((1 - align) * 24)} ms DAC DELAY)`,
+        ? "undeck5 OUTPUT AFTER LATENCY OFFSET + PHASE NUDGE (Δt = 0.0 ms · TIGHT!)"
+        : `undeck5 SPEAKER OUTPUT BEFORE CALIBRATION (+${Math.round((1 - align) * 24)} ms DAC DELAY)`,
       x0,
       154,
     );
@@ -3046,7 +3046,7 @@ export function howToModalMarkup(): string {
         </div>
         <div class="howto-quick" data-mode="sync">
           <h3>Sync in 30 seconds</h3>
-          <p class="hq-lead">Lock player5 to the DJs.</p>
+          <p class="hq-lead">Lock undeck5 to the DJs.</p>
           <div class="hq-steps"><div class="hq-step"><span class="hq-num">1</span><b>Connect</b><p>Ethernet to the booth switch for CDJs, or the same Wi-Fi for Ableton Link.</p></div><div class="hq-step"><span class="hq-num">2</span><b>Start the bridge</b><p>Run player5-bridge on your laptop (see README).</p></div><div class="hq-step"><span class="hq-num">3</span><b>Pick the source</b><p>Click the clock button at the top and choose CDJ / bridge or Ableton Link.</p></div></div>
         </div>
       </section>
@@ -3158,7 +3158,7 @@ export function howToModalMarkup(): string {
           </li>
           <li>
             <strong>3. Sync with USB / DIN MIDI Clock or Manual Tap Tempo:</strong>
-            Connect a USB-MIDI interface, open player5 in Chrome or Edge, select <strong>MIDI</strong> in <strong>Clock</strong>, and choose your MIDI input port (24 PPQN + Start/Stop). For vinyl or analog setups without sync data, select <strong>Tap</strong> and press <kbd>T</kbd> 4 times on the beat.
+            Connect a USB-MIDI interface, open undeck5 in Chrome or Edge, select <strong>MIDI</strong> in <strong>Clock</strong>, and choose your MIDI input port (24 PPQN + Start/Stop). For vinyl or analog setups without sync data, select <strong>Tap</strong> and press <kbd>T</kbd> 4 times on the beat.
           </li>
           <li>
             <strong>4. Calibrate Zero-Latency Alignment (Sync Click, Nudge &amp; 1-Bar Launch):</strong>

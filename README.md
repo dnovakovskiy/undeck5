@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/logo.svg" alt="player5 — Local Prototype · 3 Friends: 2x B2B DJs + 1x Laptop Drum Machine" width="560" />
+  <img src="docs/assets/logo.svg" alt="undeck5 — Local Prototype · 3 Friends: 2x B2B DJs + 1x Laptop Drum Machine" width="560" />
   <br /><br />
   <img src="docs/assets/hero-retrowave-b2b.jpg" alt="View from behind the booth in a Berlin underground warehouse techno club: two DJs mixing B2B across 4 decks while the 3rd friend stands beside them on stage playing a wired laptop drum machine in front of a locked-in crowd" width="100%" />
 
@@ -8,16 +8,16 @@
     <em>What is Friend #3 supposed to do — nod politely with an unlit cigarette waiting 40 minutes for a turn?</em>
   </h3>
   <p>
-    Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Player #5</strong> — casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
+    Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Deck #5</strong> — casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
   </p>
   <p>
-    🎬 <a href="https://github.com/dnovakovskiy/player5/releases/download/v0.2.0/player5-overview.mp4"><strong>Watch / Download the 18-Second Live Audio + Video Overview (MP4, 4.4 MB)</strong></a>
+    🎬 <a href="https://github.com/dnovakovskiy/undeck5/releases/download/v0.2.0/undeck5-overview.mp4"><strong>Watch / Download the 18-Second Live Audio + Video Overview (MP4, 4.4 MB)</strong></a>
   </p>
 </div>
 
 > [!IMPORTANT]
 > **Status: Shameless Local Prototype (Runs on Your Laptop Today — Native App Maybe Later)**
-> Nobody asked for a Rust drum machine pretending to be a fifth CDJ, yet here we are. `player5` is currently an **early local prototype** meant for living-room afterhours, questionable studio experiments, and crashing your friends' B2B set from a browser tab (or one offline `.html` file + a tiny Rust sync bridge). Because the whole synth and sequencer core (`core/`) is already deterministic Rust, it **may grow up into a native macOS / iPadOS booth app** later.
+> Nobody asked for a Rust drum machine pretending to be a fifth CDJ, yet here we are. `undeck5` is currently an **early local prototype** meant for living-room afterhours, questionable studio experiments, and crashing your friends' B2B set from a browser tab (or one offline `.html` file + a tiny Rust sync bridge). Because the whole synth and sequencer core (`core/`) is already deterministic Rust, it **may grow up into a native macOS / iPadOS booth app** later.
 
 ---
 
@@ -34,7 +34,7 @@
 ## 🎛️ What It Looks Like in Action
 
 <div align="center">
-  <img src="docs/assets/devices-overview.svg" alt="Overview of the 4 emulated club devices in player5: Step Sequencer, Pattern Player, DJS-1000 Deck, and RMX-1000 Station sharing one Rust/Wasm engine" width="100%" />
+  <img src="docs/assets/devices-overview.svg" alt="Overview of the 4 emulated club devices in undeck5: Step Sequencer, Pattern Player, DJS-1000 Deck, and RMX-1000 Station sharing one Rust/Wasm engine" width="100%" />
 </div>
 
 Every surface shares **one sample-accurate clock and Rust/Wasm audio engine**, so switching views or color themes never hiccups. Fresh builds always open clean — click **`Save`** to store your startup rig, or **`Reset`** anytime to wipe back to factory defaults.
@@ -45,7 +45,7 @@ Minimalist club layer deck built to ride underneath or on top of a playing DJ tr
 
 ![Pattern Player — Traktor Pro 4+ style layer deck with genre filter chips, heavy sub-bass kits, UK Sub Breakbeat pattern, and Echo riser buildup armed for the drop](docs/assets/screen-pattern-player.png)
 
-- **7 Heavy-Bass Synthesized Kits + Offline WAV Loader:** Ships with `Berlin Sub Rumble`, `Hard Industrial Sub`, `Peak-Time Acid Sub`, `UK Sub & Breakbeat`, `Minimal Sub-Click`, `Chicago Sub-Jack`, and `Top + Sub Layer (No Kick)` — plus **`+ Sample`** to drop local `.wav`/`.mp3`/`.ogg` one-shots from your laptop *(commercial artist kits inside Traktor Pro 4 are proprietary bundled assets, so `player5` synthesizes club-weight sub kits natively and supports offline local samples)*.
+- **7 Heavy-Bass Synthesized Kits + Offline WAV Loader:** Ships with `Berlin Sub Rumble`, `Hard Industrial Sub`, `Peak-Time Acid Sub`, `UK Sub & Breakbeat`, `Minimal Sub-Click`, `Chicago Sub-Jack`, and `Top + Sub Layer (No Kick)` — plus **`+ Sample`** to drop local `.wav`/`.mp3`/`.ogg` one-shots from your laptop *(commercial artist kits inside Traktor Pro 4 are proprietary bundled assets, so `undeck5` synthesizes club-weight sub kits natively and supports offline local samples)*.
 
 ---
 
@@ -77,19 +77,19 @@ Press **`?`** anytime for a **3-step 30-second Quick guide** tailored to whichev
 ## 🛠️ How to Install & Start (Local Prototype)
 
 <div align="center">
-  <img src="docs/assets/setup-diagram.svg" alt="player5 local installation and DJ booth hookup architecture diagram" width="100%" />
+  <img src="docs/assets/setup-diagram.svg" alt="undeck5 local installation and DJ booth hookup architecture diagram" width="100%" />
 </div>
 
 ### Option 0: Zero-Build Offline File (Fastest)
 
-Download **`player5-offline.html`** from the [**`v0.2.0` Release**](https://github.com/dnovakovskiy/player5/releases/tag/v0.2.0) *(see [`CHANGELOG.md`](CHANGELOG.md) for what's new)* and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
+Download **`undeck5-offline.html`** from the [**`v0.2.0` Release**](https://github.com/dnovakovskiy/undeck5/releases/tag/v0.2.0) *(see [`CHANGELOG.md`](CHANGELOG.md) for what's new)* and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
 
 ### Option A: Copy-Paste Prompt for Your AI Coding Agent
 
 Using **Antigravity**, **Claude Code**, **Cursor**, or **Codex**? Paste this prompt:
 
 ```text
-Clone https://github.com/dnovakovskiy/player5.git (if not already cloned), check that Rust (with wasm32-unknown-unknown) and Node.js 20+ are installed, build the WebAssembly DSP core with ./scripts/build-wasm.sh, install web dependencies in apps/web, start the local dev server, and give me the localhost URL to open in Chrome.
+Clone https://github.com/dnovakovskiy/undeck5.git (if not already cloned), check that Rust (with wasm32-unknown-unknown) and Node.js 20+ are installed, build the WebAssembly DSP core with ./scripts/build-wasm.sh, install web dependencies in apps/web, start the local dev server, and give me the localhost URL to open in Chrome.
 ```
 
 ### Option B: Run Locally from Source (Mac / Linux)
@@ -97,8 +97,8 @@ Clone https://github.com/dnovakovskiy/player5.git (if not already cloned), check
 **Prerequisites:** [Node.js 20+](https://nodejs.org/) and [Rust (`rustup`)](https://rustup.rs/).
 
 ```sh
-git clone https://github.com/dnovakovskiy/player5.git
-cd player5
+git clone https://github.com/dnovakovskiy/undeck5.git
+cd undeck5
 rustup target add wasm32-unknown-unknown
 ./scripts/build-wasm.sh
 cd apps/web && npm install && npm run dev
@@ -110,11 +110,11 @@ Open **`http://localhost:5173`**, hit **`Space`**, and start annoying your B2B f
 
 ## 🥁 Plugging In Your Own Sounds (Native Instruments Maschine / Custom `.wav` Kits)
 
-Out of the box, `player5` synthesizes every drum in pure Rust math (`[SYNTH]`) so the repo stays lightweight and 100% free of copyrighted audio. Want real studio punch from libraries you **already own on your laptop** (like **NI Maschine 2 Factory**, **Deep Matter**, **Expansions**, or any personal `.wav` pack)?
+Out of the box, `undeck5` synthesizes every drum in pure Rust math (`[SYNTH]`) so the repo stays lightweight and 100% free of copyrighted audio. Want real studio punch from libraries you **already own on your laptop** (like **NI Maschine 2 Factory**, **Deep Matter**, **Expansions**, or any personal `.wav` pack)?
 
 1. **Zero-Setup Browser Picker (Works Everywhere):**
    - Click **`My sounds`** in the top toolbar → **`+ Load NI / WAV Folder`** → point it at e.g. `/Users/Shared/Deep Matter Library/Samples/Drums` or `/Users/Shared/Maschine 2 Factory Library Library/Samples/Drums`.
-   - `player5` auto-maps **Kick, Snare, Clap, Closed/Open Hat, Rim, Toms & Cowbell** straight into the AudioWorklet sampler (`Auto-Fill Kit`), and every plugged-in voice gets an emerald **`[WAV]`** badge + sample name so you never confuse NI samples with built-in `[SYNTH]`.
+   - `undeck5` auto-maps **Kick, Snare, Clap, Closed/Open Hat, Rim, Toms & Cowbell** straight into the AudioWorklet sampler (`Auto-Fill Kit`), and every plugged-in voice gets an emerald **`[WAV]`** badge + sample name so you never confuse NI samples with built-in `[SYNTH]`.
 2. **Automatic Local Mount via `player5-bridge`:**
    - Start `player5-bridge` (or pass `--samples-dir "/path/to/your/drums"`). On macOS it automatically discovers NI sample libraries in `/Users/Shared` and serves them locally at `http://localhost:17505` with zero copying into the repo.
 3. **Bookmark Your Go-To Hits (`★ Favorites`):**
@@ -133,13 +133,13 @@ Out of the box, `player5` synthesizes every drum in pure Rust math (`[SYNTH]`) s
 
 ---
 
-## 🧭 Where `player5`'s Specific Novelty Sits (Even Though Nobody Asked for It)
+## 🧭 Where `undeck5`'s Specific Novelty Sits (Even Though Nobody Asked for It)
 
 Look, running a reverse-engineered CDJ protocol in Rust so a 3rd friend can mash drum rolls on a MacBook keyboard behind two serious techno DJs is inherently absurd — which is exactly why it's fun. Surprisingly, though, **nothing else on GitHub actually puts all the pieces together**:
 
 - **Sync-Only Bridges** (`Deep-Symmetry/beat-link-trigger`, `strikeout/autoblink`, `Suva/pro-dj-link-to-midi`, `evanpurkhiser/prolink-go`, `kyleawayan/opus-quad-pro-dj-link-analysis`): Brilliant at decoding Pro DJ Link / Opus Quad packets, **zero sound engine**. You still need Ableton Live or an \$800+ hardware drum machine on the receiving end.
 - **Browser Drum Toys** (`io-8O8` web clones, `gdamdam/mpump`, `x-1000`, `noturderek/djs1000-emulator`): Fun in isolation, **useless in an actual DJ booth** — they lack native Pioneer Pro DJ Link + Opus Quad + 24-PPQN MIDI PLL phase-locking, or require proprietary QEMU firmware images.
-- **`player5` = All Booth Sync Protocols Built Directly Into a Multi-Device Instrument:**
+- **`undeck5` = All Booth Sync Protocols Built Directly Into a Multi-Device Instrument:**
   1. **Omni-Protocol Clock Follower Inside the Audio Engine (`core/clock` + `apps/bridge`):** Native clean-room Rust followers for **Pioneer Pro DJ Link**, **AlphaTheta Opus Quad**, **Ableton Link (`UDP 20808`)**, **USB/DIN MIDI (24 PPQN PLL)**, and **Tap + ms phase/latency calibration** feeding sample-accurate lookahead scheduling directly — no virtual MIDI buses, no JVM, no extra DAW.
   2. **4 Club Workflows + Owned NI `.wav` Samples + Built-In Synth (`core/dsp` + `host.js`):** **TR Step Sequencer**, **Traktor-style Pattern Player** (with tempo-synced noise buildups & rolling post-filter drop tails), **DJS-1000 Pad/Scene Deck**, and **RMX-1000 Remix Station** — all playable from one laptop keyboard with **`ACTIVE`/`PASSIVE`** zero-bleed routing.
 
