@@ -11,7 +11,7 @@
     Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Deck #5</strong>, casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
   </p>
   <p>
-    🎬 <a href="https://github.com/dnovakovskiy/undeck5/releases/download/v0.2.0/undeck5-overview.mp4"><strong>Watch / Download the 18-Second Live Audio + Video Overview (MP4, 4.4 MB)</strong></a>
+    <img src="docs/assets/undeck5-demo.gif" alt="Live walkthrough of undeck5 UI v2: TR Drums, hold-Command shortcuts, Pattern Player Echo riser buildup and Drop, Split Booth with RMX FX, and 30-second Quick guide" width="100%" />
   </p>
 </div>
 
