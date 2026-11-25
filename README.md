@@ -82,7 +82,7 @@ Press **`?`** anytime for a **3-step 30-second Quick guide** tailored to whichev
 
 ### Option 0: Zero-Build Offline File (Fastest)
 
-Download **`player5-offline.html`** from the [**`v0.1.0` Release**](https://github.com/dnovakovskiy/player5/releases/tag/v0.1.0) and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
+Download **`player5-offline.html`** from the [**`v0.2.0` Release**](https://github.com/dnovakovskiy/player5/releases/tag/v0.2.0) *(see [`CHANGELOG.md`](CHANGELOG.md) for what's new)* and double-click it in Chrome, Safari, or Edge. Everything (synthesizer, 4 surfaces, visual manual) runs locally with zero server and zero network requests *(note: Pro DJ Link / Ableton Link sync needs the local bridge below)*.
 
 ### Option A: Copy-Paste Prompt for Your AI Coding Agent
 
