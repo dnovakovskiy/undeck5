@@ -610,8 +610,8 @@ fn handle_connection(
                 head_only,
             );
         }
-        p if p.starts_with("/samples/file?") => {
-            let query = p.strip_prefix("/samples/file?").unwrap_or("");
+        "/samples/file" => {
+            let query = req.query.as_str();
             let served = query_param(query, "lib")
                 .zip(query_param(query, "path"))
                 .and_then(|(lib, rel)| catalog.resolve_file(&lib, &rel))

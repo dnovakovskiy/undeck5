@@ -21,6 +21,8 @@ pub struct Request {
     pub method: String,
     /// Path without the query string, still percent-encoded.
     pub path: String,
+    /// Raw query string (after `?`, before `#`), still percent-encoded.
+    pub query: String,
     /// Headers in order, names lowercased.
     pub headers: Vec<(String, String)>,
 }
@@ -117,7 +119,11 @@ pub fn parse_head(head: &str) -> Option<Request> {
     if !method.bytes().all(|b| b.is_ascii_uppercase()) {
         return None;
     }
-    let path = target.split(['?', '#']).next()?.to_string();
+    let no_frag = target.split('#').next()?;
+    let (path, query) = match no_frag.split_once('?') {
+        Some((p, q)) => (p.to_string(), q.to_string()),
+        None => (no_frag.to_string(), String::new()),
+    };
     let mut headers = Vec::new();
     for line in lines {
         let (name, value) = line.split_once(':')?;
@@ -129,6 +135,7 @@ pub fn parse_head(head: &str) -> Option<Request> {
     Some(Request {
         method,
         path,
+        query,
         headers,
     })
 }

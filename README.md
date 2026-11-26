@@ -11,6 +11,13 @@
     Plug an Ethernet dongle into the booth switch, hijack the master clock over reverse-engineered Pro DJ Link (or Ableton Link), and declare yourself <strong>Deck #5</strong>, casually dropping dub techno sub-bass, breakbeats, and dramatic noise buildups from a MacBook keyboard like it's completely normal.
   </p>
   <p>
+    <a href="https://dnovakovskiy.github.io/undeck5/">
+      <img src="https://img.shields.io/badge/%E2%96%B6%20TRY%20NOW-Open%20undeck5%20in%20Browser-ff7a1a?style=for-the-badge" alt="TRY NOW: Open undeck5 in Browser" height="38" />
+    </a>
+    <br />
+    <sub>Synthesized club drums, Pattern Player, DJS-1000, RMX FX, offline PWA install, and local WAV folder loading right in Chrome / Safari / Edge.</sub>
+  </p>
+  <p>
     <img src="docs/assets/undeck5-demo.gif" alt="Live walkthrough of undeck5 UI v2: TR Drums, hold-Command shortcuts, Pattern Player Echo riser buildup and Drop, Split Booth with RMX FX, and 30-second Quick guide" width="100%" />
   </p>
 </div>
