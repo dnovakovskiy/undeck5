@@ -749,4 +749,4 @@ export const PRESETS: readonly Preset[] = [
   ),
 ];
 
-export const DEFAULT_PRESET = PRESETS[0]!;
+export const DEFAULT_PRESET = PRESETS.find((p) => p.id === "berlin-tresor") ?? PRESETS[0]!;

@@ -148,7 +148,7 @@ test("presets load original patterns and undo restores", async ({ page }) => {
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator("#bpm")).toHaveValue("132");
   await page.keyboard.press("Control+z");
-  await expect(page.locator("#bpm")).toHaveValue("124");
+  await expect(page.locator("#bpm")).toHaveValue("136");
   await page.keyboard.press("Control+Shift+z");
   await expect(page.locator("#bpm")).toHaveValue("132");
 });
@@ -436,7 +436,7 @@ test("MacBook Air keyboard bindings and 3Blue1Brown How-To video explainer (Step
   await page.keyboard.press("KeyU");
   await expect(app(page)).toHaveAttribute("data-kit", "club-punch");
   await page.keyboard.press("BracketRight");
-  await expect(page.locator("#bpm")).toHaveValue("125");
+  await expect(page.locator("#bpm")).toHaveValue("137");
 
   // Open the 3Blue1Brown How-To video explainer with '?' (Slash) in Step Sequencer mode
   await page.keyboard.press("Slash");
@@ -1121,8 +1121,9 @@ test("Active/Passive machine toggles, hotkey machine switching, and zero cross-m
   await page.keyboard.down("KeyR");
   await expect(page.locator("#rmx-release-lever")).toHaveAttribute("aria-pressed", "false");
   await page.keyboard.up("KeyR");
+  const vfxBefore = (await page.locator("#vfx-readout").textContent()) ?? "";
   await page.keyboard.press("Control+Digit2");
-  await expect(page.locator("#vfx-readout")).toContainText("DRY");
+  await expect(page.locator("#vfx-readout")).toHaveText(vfxBefore);
 
   // 2. Toggle Pattern Player PASSIVE via Backslash (\) -> hotkeys ignore passive machine instead of waking it
   await page.keyboard.press("Backslash");
