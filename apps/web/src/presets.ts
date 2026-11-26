@@ -702,7 +702,7 @@ export const PRESETS: readonly Preset[] = [
         open_hat: { steps: "--X---X---X---X-", decay: 0.72, level: 0.8 },
       },
     },
-    "hard-drive",
+    "club-punch",
   ),
   preset(
     "deep-matter-dub",
